@@ -763,8 +763,11 @@ async def _process_upload(file: UploadFile, table_name: str, engine):
                                     continue 
                         else:
                             # Handle composite keys (multiple OR conditions) using connection.execute
+                            # --- Initialize lists BEFORE the loop --- 
                             pk_conditions = []
                             params_list = [] 
+                            condition_parts = [] # <<< Initialize here
+                            
                             for pk_tuple in pk_list_from_df:
                                 tuple_cond = []
                                 valid_tuple = True
