@@ -58,9 +58,10 @@ except Exception as e:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Run this when FastAPI starts up
-    logger.info("App starting up... let's load the dashboard data first.")
-    await update_dashboard_data() # run the data update task
-    logger.info("Initial dashboard data loaded. Ready to go!")
+    logger.info("App starting up... triggering initial background data load.")
+    # DON'T await the update here - let the app start quickly!
+    # await update_dashboard_data() # OLD: This blocks startup
+    # Instead, trigger the job to run once via the scheduler (see below)
     
     yield # the app runs while this is yielded
     
@@ -487,6 +488,9 @@ async def update_dashboard_data():
 scheduler.add_job(update_dashboard_data, 'interval', hours=1, id='dashboard_update_job')
 # Start the scheduler (it runs in the background)
 scheduler.start()
+# Trigger the initial data load immediately after starting the scheduler
+scheduler.add_job(update_dashboard_data, id='initial_dashboard_update') 
+logger.info("Scheduler started and initial data load triggered.")
 
 
 # --- CORS Middleware --- (allows the frontend to talk to the backend)
