@@ -57,7 +57,8 @@ function useFetchDashboardData<T>(endpoint: string): FetchState<T> {
         // Construct URL robustly
         const fullUrl = `${API_BASE_URL}/${cleanEndpoint}`;
         
-        logger.info(`Fetching from: ${fullUrl}`); // Add logging
+        // Use console.log for frontend logging
+        console.log(`Fetching from: ${fullUrl}`); 
 
         const response = await fetch(fullUrl, {
           headers: { 'Authorization': `Bearer ${token}` },
