@@ -3,6 +3,9 @@ services:
     name: main.py
     env: python
     plan: free
+    envVars:
+      - key: ODBCSYSINI
+        value: /etc
     buildCommand: |
       apt-get update && \
       apt-get install -y curl apt-transport-https gnupg && \
