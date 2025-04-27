@@ -60,10 +60,13 @@ function useFetchDashboardData<T>(endpoint: string, retryDelay = 5000, maxRetrie
            setState(prev => ({ ...prev, loading: true, error: null, isCalculating: false }));
       }
       
-      // Construct URL
+      // Ensure endpoint doesn't start with /
       const cleanEndpoint = endpoint.startsWith('/') ? endpoint.substring(1) : endpoint;
+      // Construct URL robustly
       const fullUrl = `${API_BASE_URL}/${cleanEndpoint}`;
-      console.log(`Fetching from: ${fullUrl} (Attempt: ${retryCount + 1})`);
+      
+      // Use console.log for frontend logging
+      console.log(`Fetching from: ${fullUrl} (Attempt: ${retryCount + 1})`); 
 
       try {
         const response = await fetch(fullUrl, {
