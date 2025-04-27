@@ -40,7 +40,8 @@ function useFetchDashboardData<T>(endpoint: string): FetchState<T> {
     error: null,
   });
   const { token } = useAuth();
-  const API_BASE_URL = 'https://ccproj.onrender.com';
+  // Define base URL - ensure no trailing slash
+  const API_BASE_URL = 'https://ccproj.onrender.com'.replace(/\/$/, ''); 
 
   useEffect(() => {
     if (!token) {
@@ -51,7 +52,14 @@ function useFetchDashboardData<T>(endpoint: string): FetchState<T> {
     const fetchData = async () => {
       setState({ data: null, loading: true, error: null });
       try {
-        const response = await fetch(`${API_BASE_URL}/${endpoint}`, {
+        // Ensure endpoint doesn't start with /
+        const cleanEndpoint = endpoint.startsWith('/') ? endpoint.substring(1) : endpoint;
+        // Construct URL robustly
+        const fullUrl = `${API_BASE_URL}/${cleanEndpoint}`;
+        
+        logger.info(`Fetching from: ${fullUrl}`); // Add logging
+
+        const response = await fetch(fullUrl, {
           headers: { 'Authorization': `Bearer ${token}` },
         });
         if (!response.ok) {
