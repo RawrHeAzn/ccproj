@@ -168,6 +168,42 @@ const DashboardPage: React.FC = () => {
   const seasonalTrends = useFetchDashboardData<SeasonalTrend[]>('/seasonal-trends');
   const churnRisk = useFetchDashboardData<ChurnRiskData>('/churn-risk');
 
+  // --- NEW: State for derived churn stats ---
+  const [atRiskBySizeData, setAtRiskBySizeData] = useState<any[]>([]);
+  const [atRiskByChildrenData, setAtRiskByChildrenData] = useState<any[]>([]);
+
+  // --- Effect to process churn list when data arrives ---
+  useEffect(() => {
+    if (churnRisk.data?.at_risk_list && churnRisk.data.at_risk_list.length > 0) {
+      const list = churnRisk.data.at_risk_list;
+
+      // Calculate distribution by Household Size
+      const sizeCounts: { [key: string]: number } = {};
+      list.forEach(customer => {
+        const size = String(customer.HshdSize || 'Unknown'); // Handle null/undefined
+        sizeCounts[size] = (sizeCounts[size] || 0) + 1;
+      });
+      const sizeData = Object.entries(sizeCounts).map(([size, count]) => ({ HshdSize: size, count }));
+      // Optional: Sort sizeData if needed (e.g., numerically/categorically)
+      setAtRiskBySizeData(sizeData);
+
+      // Calculate distribution by Children Count
+      const childrenCounts: { [key: string]: number } = {};
+      list.forEach(customer => {
+        const children = String(customer.Children || 'Unknown'); // Handle null/undefined
+        childrenCounts[children] = (childrenCounts[children] || 0) + 1;
+      });
+      const childrenData = Object.entries(childrenCounts).map(([children, count]) => ({ Children: children, count }));
+      // Optional: Sort childrenData if needed
+      setAtRiskByChildrenData(childrenData);
+
+    } else {
+      // Reset if data is null or empty
+      setAtRiskBySizeData([]);
+      setAtRiskByChildrenData([]);
+    }
+  }, [churnRisk.data]); // Rerun when churnRisk data changes
+
   // Format seasonal data
   const formatSeasonalData = (data: SeasonalTrend[] | null) => {
     if (!data) return [];
@@ -543,6 +579,35 @@ const DashboardPage: React.FC = () => {
                />
              ) : <p className="text-sm text-gray-500">Summary data unavailable.</p>}
           </ChartWrapper>
+
+          {/* --- NEW: At-Risk Count by HH Size Chart --- */}
+          <ChartWrapper title="At-Risk Count by Household Size" fetchState={churnRisk}>
+             {atRiskBySizeData.length > 0 ? (
+               <SimpleBarChart 
+                 data={atRiskBySizeData}
+                 xAxisKey="HshdSize"
+                 xAxisLabel="Household Size"
+                 yAxisLabel="Customer Count"
+                 barDataKey="count" 
+                 fillColor="#fb923c" // Orange color
+               />
+             ) : <p className="text-sm text-gray-500">Summary data unavailable or no at-risk customers.</p>}
+          </ChartWrapper>
+
+          {/* --- NEW: At-Risk Count by Children Chart --- */}
+          <ChartWrapper title="At-Risk Count by Children" fetchState={churnRisk}>
+             {atRiskByChildrenData.length > 0 ? (
+               <SimpleBarChart 
+                 data={atRiskByChildrenData}
+                 xAxisKey="Children"
+                 xAxisLabel="Number of Children"
+                 yAxisLabel="Customer Count"
+                 barDataKey="count" 
+                 fillColor="#facc15" // Yellow color
+               />
+             ) : <p className="text-sm text-gray-500">Summary data unavailable or no at-risk customers.</p>}
+          </ChartWrapper>
+
         </div>
         
         {/* --- At-Risk Customer Table --- */}

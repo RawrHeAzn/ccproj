@@ -320,40 +320,31 @@ def _fetch_churn_risk(conn):
     summary_stats = {}
     try:
         # How many loyal vs non-loyal are at risk?
-        # df should already be cleaned now
+        # df is now clean
         loyalty_counts = df['Loyalty_flag'].value_counts().reset_index()
         loyalty_counts.columns = ['loyalty_flag', 'count']
-        # Optional safety replace (likely not needed now, but doesn't hurt)
-        loyalty_counts = loyalty_counts.replace([float('inf'), float('-inf'), float('nan')], None)
         summary_stats['count_by_loyalty'] = loyalty_counts.to_dict(orient='records')
 
         # How many in each income group are at risk?
-        # df should already be cleaned now
+        # df is now clean
         income_counts = df['IncomeRange'].value_counts().reset_index()
         income_counts.columns = ['income_range', 'count']
-        # Optional safety replace
-        income_counts = income_counts.replace([float('inf'), float('-inf'), float('nan')], None)
+        
         # --- ADD SORTING FOR INCOME RANGE --- 
-        # Define the correct order (should match the one in _fetch_engagement_by_income)
         income_order = [
-            '<25K', 
-            '25-34K',
-            '35-49K',
-            '50-74K', 
-            '75-99K', 
-            '100-149K', 
-            '150K+'
+            '<25K', '25-34K', '35-49K', '50-74K', 
+            '75-99K', '100-149K', '150K+'
         ]
-        # Convert to categorical and sort
         income_counts['income_range'] = pd.Categorical(
             income_counts['income_range'], 
             categories=income_order, 
             ordered=True
         )
         income_counts = income_counts.sort_values('income_range')
-        # Convert category back to string for JSON if needed (usually handled by to_dict)
-        # income_counts['income_range'] = income_counts['income_range'].astype(str)
+        # Convert category back to string for JSON
+        income_counts['income_range'] = income_counts['income_range'].astype(str)
         # --- END SORTING --- 
+        
         summary_stats['count_by_income'] = income_counts.to_dict(orient='records')
         
     except Exception as e:
@@ -362,12 +353,11 @@ def _fetch_churn_risk(conn):
 
     logger.info(f"Found {len(df)} customers potentially churnin'!")
     
-    # df should be clean already, df_final not strictly needed but keep for safety
-    df_final = df.replace([float('inf'), float('-inf'), float('nan')], None)
+    # df should be clean from the earlier replace call
 
     # Send back the list of customers and the summaries
     return {
-        "at_risk_list": df_final.to_dict(orient='records'), 
+        "at_risk_list": df.to_dict(orient='records'), # Use the cleaned df directly
         "summary_stats": summary_stats
     }
 
