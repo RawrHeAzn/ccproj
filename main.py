@@ -121,13 +121,19 @@ def get_pyodbc_connection():
 
 # Top 10 spenders
 def _fetch_top_spenders(conn):
+    # Get Top 10 by spending amount first
     query = '''
         SELECT TOP 10 HSHD_NUM, SUM(SPEND) AS total_spend
         FROM transactions
         GROUP BY HSHD_NUM
-        ORDER BY total_spend ASC;
+        ORDER BY total_spend DESC; -- Order by spend DESC to get the actual top 10
     '''
     df = pd.read_sql(query, conn)
+    
+    # Sort the result by Household Number (X-axis) for display
+    if not df.empty:
+        df = df.sort_values(by='HSHD_NUM', ascending=True)
+        
     df = rename_columns(df, {'HSHD_NUM': 'Hshd_num'}) # match frontend naming
     return df.to_dict(orient='records')
 
@@ -314,11 +320,15 @@ def _fetch_churn_risk(conn):
         # How many loyal vs non-loyal are at risk?
         loyalty_counts = df['Loyalty_flag'].value_counts().reset_index()
         loyalty_counts.columns = ['loyalty_flag', 'count']
+        # Ensure counts are standard int, replace inf/-inf/nan just in case (overkill but safe)
+        loyalty_counts = loyalty_counts.replace([float('inf'), float('-inf'), float('nan')], None)
         summary_stats['count_by_loyalty'] = loyalty_counts.to_dict(orient='records')
 
         # How many in each income group are at risk?
         income_counts = df['IncomeRange'].value_counts().reset_index()
         income_counts.columns = ['income_range', 'count']
+        # Ensure counts are standard int, replace inf/-inf/nan
+        income_counts = income_counts.replace([float('inf'), float('-inf'), float('nan')], None)
         
         # --- ADD SORTING FOR INCOME RANGE --- 
         # Define the correct order (should match the one in _fetch_engagement_by_income)
@@ -350,9 +360,13 @@ def _fetch_churn_risk(conn):
 
     logger.info(f"Found {len(df)} customers potentially churnin'!")
     
+    # --- Final Cleanup for JSON Compliance --- 
+    # Replace inf/nan in the main df AFTER all calculations
+    df_final = df.replace([float('inf'), float('-inf'), float('nan')], None)
+
     # Send back the list of customers and the summaries
     return {
-        "at_risk_list": df.to_dict(orient='records'),
+        "at_risk_list": df_final.to_dict(orient='records'), # Use cleaned df
         "summary_stats": summary_stats
     }
 

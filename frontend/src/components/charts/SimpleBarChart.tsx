@@ -56,7 +56,7 @@ const SimpleBarChart: React.FC<SimpleBarChartProps> = ({ data, xAxisKey, barData
         <Tooltip formatter={(value: number | string) => 
             typeof value === 'number' ? value.toFixed(2) : value
         } />
-        <Legend wrapperStyle={{ paddingTop: '20px' }} />
+        <Legend verticalAlign="top" wrapperStyle={{ paddingBottom: '20px' }} />
         <Bar dataKey={barDataKey} fill={fillColor} />
       </BarChart>
     </ResponsiveContainer>
