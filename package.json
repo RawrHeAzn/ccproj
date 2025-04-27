@@ -1,0 +1,22 @@
+{
+  "dependencies": {
+    "chart.js": "^4.4.9",
+    "d3-format": "^3.1.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-router-dom": "^7.5.2",
+    "recharts": "^2.15.3",
+    "svelte-chartjs": "^3.1.5",
+    "tailwind": "^2.3.1",
+    "vite": "^6.3.3"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.1.4",
+    "@types/node": "^22.15.2",
+    "@types/react": "^19.1.2",
+    "@vitejs/plugin-react": "^4.4.1",
+    "autoprefixer": "^10.4.21",
+    "postcss": "^8.5.3",
+    "tailwindcss": "^4.1.4"
+  }
+}

@@ -1,0 +1,24 @@
+# --- Core FastAPI & Server ---
+fastapi
+uvicorn[standard]
+python-multipart # Needed for file uploads
+
+# --- Database & Data Handling ---
+sqlalchemy
+pyodbc
+pandas
+
+# --- Machine Learning & Analysis ---
+scikit-learn
+joblib
+mlxtend # For Apriori
+
+# --- Background Tasks ---
+apscheduler
+
+# --- Authentication & Security ---
+passlib[bcrypt]
+python-dotenv # Good practice for managing secrets like DB password
+
+# --- Utilities ---
+urllib3 # Often a hidden dependency 

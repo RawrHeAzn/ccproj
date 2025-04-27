@@ -1,0 +1,11 @@
+HSHD_NUM,LOYALTY_FLAG,AGE_RANGE,MARITAL_STATUS,INCOME_RANGE,HOMEOWNER_DESC,HSHD_COMPOSITION,HSHD_SIZE,CHILDREN,income_range_numeric,age_range_numeric
+10,Y,45-54,Single,35-49K,Homeowner,1 Adult,1,0,42000,49
+29,Y,55-64,Married,100-150K,Homeowner,2 Adults and Kids,3,1,125000,59
+53,Y,55-64,Married,50-74K,Homeowner,2 Adults and Kids,3,1,62000,59
+54,Y,75+,Married,UNDER 35K,Homeowner,2 Adults,2,0,35000,80
+60,Y,45-54,Married,35-49K,Homeowner,2 Adults and Kids,5,3,42000,49
+81,N,55-64,Married,50-74K,Homeowner,2 Adults and Kids,3,1,62000,59
+92,Y,55-64,Married,75-99K,Homeowner,2 Adults and Kids,3,1,87000,59
+99,Y,35-44,Married,75-99K,Homeowner,2 Adults and Kids,3,1,87000,39
+115,Y,35-44,Married,35-49K,Homeowner,2 Adults and Kids,5,3,42000,39
+117,Y,45-54,Single,150K+,Homeowner,1 Adult and Kids,5,3,155000,49
