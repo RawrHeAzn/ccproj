@@ -104,7 +104,11 @@ def get_sqlalchemy_connection():
         return None # return None if it breaks
 
 # --- PyODBC Setup --- (older way, maybe needed for some specific stuff?)
+<<<<<<< HEAD
 conn_str = f'DRIVER={driver};SERVER={server};PORT=1433;DATABASE={database};UID={username};PWD={password};Encrypt=yes;TrustServerCertificate=no;Connection Timeout=30'
+=======
+conn_str = f'DRIVER={driver};SERVER={server};PORT=1433;DATABASE={database};UID={username};PWD={password};Encrypt=yes;TrustServerCertificate=no;'
+>>>>>>> f5d7a4e07b52b54ec9dd0ffa76ffdf54e8abee51
 
 # Function to get a plain pyodbc connection
 def get_pyodbc_connection(): 
