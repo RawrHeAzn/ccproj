@@ -31,8 +31,8 @@ RUN apt-get update && \
         # unixodbc-bin is included in unixodbc on Debian 12+ \
     # Install the driver AFTER apt lists are updated
     && ACCEPT_EULA=Y apt-get install -y --no-install-recommends msodbcsql18 && \
-    # Configure odbcinst.ini using the base symlink name
-    printf "[ODBC Driver 18 for SQL Server]\nDescription=Microsoft ODBC Driver 18 for SQL Server\nDriver=/opt/microsoft/msodbcsql18/lib64/libmsodbcsql-18.so\nUsageCount=1\n" > /etc/odbcinst.ini && \
+    # Configure odbcinst.ini using the CORRECT filename found via ls
+    printf "[ODBC Driver 18 for SQL Server]\nDescription=Microsoft ODBC Driver 18 for SQL Server\nDriver=/opt/microsoft/msodbcsql18/lib64/libmsodbcsql-18.5.so.1.1\nUsageCount=1\n" > /etc/odbcinst.ini && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Set the working directory in the container
