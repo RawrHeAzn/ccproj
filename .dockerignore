@@ -1,0 +1,35 @@
+# Git files
+.git
+.gitignore
+
+# Node.js
+node_modules
+package-lock.json
+
+# Python cache/build files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+build/
+dist/
+*.egg-info/
+.venv/
+venv/
+env/
+
+# IDE/Editor files
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Render/Vercel config (not needed in Docker image)
+render.yaml
+vercel.json
+
+# Local environment files
+.env 
