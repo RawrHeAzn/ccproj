@@ -15,10 +15,6 @@ from sqlalchemy import create_engine, text # Import text
 import urllib # used for formatting the db connection string
 from apscheduler.schedulers.background import BackgroundScheduler # runs tasks on a schedule, neat!
 from contextlib import asynccontextmanager # for startup/shutdown events
-# Apriori stuff for finding item pairs
-from mlxtend.frequent_patterns import apriori, association_rules
-from mlxtend.frequent_patterns import fpgrowth
-from mlxtend.preprocessing import TransactionEncoder
 import asyncio # For triggering background tasks
 import gc # Import garbage collector
 
@@ -339,92 +335,6 @@ def _fetch_churn_risk(conn):
         "summary_stats": summary_stats
     }
 
-# --- Association Rules Function (using FP-Growth) ---
-def _fetch_association_rules(conn, min_support=0.01, min_confidence=0.1, top_n=15):
-    # Uses the FP-Growth algorithm from mlxtend (more memory efficient)
-    logger.info(f"Let's find some association rules using FP-Growth! (Support > {min_support}, Confidence > {min_confidence})")
-    query = '''
-        SELECT 
-            t.BASKET_NUM, 
-            p.COMMODITY 
-        FROM transactions t
-        JOIN products p ON t.PRODUCT_NUM = p.PRODUCT_NUM
-        WHERE p.COMMODITY IS NOT NULL AND p.COMMODITY <> '' -- ignore missing commodity names
-    '''
-    try:
-        # Specify dtype for COMMODITY to save memory
-        df_trans = pd.read_sql(query, conn, dtype={'COMMODITY': 'category'})
-        if df_trans.empty:
-            logger.warning("No transaction data for FP-Growth?")
-            return []
-
-        # Group commodities by basket
-        basket_groups = df_trans.groupby('BASKET_NUM')['COMMODITY'].apply(list).values.tolist()
-        del df_trans # Free memory
-        gc.collect()
-
-        # FP-Growth needs the data encoded into a boolean DataFrame
-        basket_sets = [list(set(basket)) for basket in basket_groups]
-        del basket_groups # Free memory
-        gc.collect()
-
-        te = TransactionEncoder()
-        te_ary = te.fit(basket_sets).transform(basket_sets)
-        df_encoded = pd.DataFrame(te_ary, columns=te.columns_)
-        del basket_sets, te_ary # Free memory
-        gc.collect()
-
-        # Run FP-Growth algorithm to find itemsets that appear frequently together
-        logger.info(f"Running FP-Growth on {len(df_encoded)} baskets, {len(df_encoded.columns)} items...")
-        frequent_itemsets = fpgrowth(df_encoded, min_support=min_support, use_colnames=True)
-        del df_encoded # Free memory after fpgrowth
-        gc.collect()
-        
-        if frequent_itemsets.empty:
-            logger.warning(f"No frequent itemsets found with support > {min_support}. Maybe lower it?")
-            return []
-
-        logger.info(f"Found {len(frequent_itemsets)} frequent itemsets. Now making rules...")
-        # Generate rules like "If {A} then {B}"
-        rules = association_rules(frequent_itemsets, metric="confidence", min_threshold=min_confidence)
-        del frequent_itemsets # Free memory
-        gc.collect()
-
-        if rules.empty:
-            logger.warning(f"No rules found with confidence > {min_confidence}. Maybe lower it?")
-            return []
-            
-        # Sort rules by "lift"
-        rules = rules.sort_values(by='lift', ascending=False)
-        
-        # Convert frozensets to strings
-        rules['antecedents'] = rules['antecedents'].apply(lambda x: ', '.join(list(x)))
-        rules['consequents'] = rules['consequents'].apply(lambda x: ', '.join(list(x)))
-        
-        # Select output columns and top N rules
-        rules_output = rules[['antecedents', 'consequents', 'support', 'confidence', 'lift']].head(top_n)
-
-        # Round numbers
-        rules_output = rules_output.round(4)
-        
-        logger.info(f"Generated {len(rules_output)} association rules. Nice!")
-        del rules
-        gc.collect()
-        return rules_output.to_dict(orient='records')
-
-    except Exception as e:
-        logger.error(f"FP-Growth blew up! Error: {e}")
-        # Ensure cleanup on error too
-        if 'df_trans' in locals(): del df_trans
-        if 'basket_groups' in locals(): del basket_groups
-        if 'basket_sets' in locals(): del basket_sets
-        if 'te_ary' in locals(): del te_ary
-        if 'df_encoded' in locals(): del df_encoded
-        if 'frequent_itemsets' in locals(): del frequent_itemsets
-        if 'rules' in locals(): del rules
-        gc.collect()
-        return [] # return empty list if it fails
-
 # --- Background Task Setup --- 
 precomputed_data = {} # dictionary to hold all the data for the dashboard charts
 scheduler = BackgroundScheduler(daemon=True) # runs in the background
@@ -448,7 +358,6 @@ def update_dashboard_data():
         "popular-products": _fetch_popular_products,
         "seasonal-trends": _fetch_seasonal_trends,
         "churn-risk": _fetch_churn_risk,
-        "association-rules": _fetch_association_rules, # the apriori results
     }
     global precomputed_data # need to modify the global dict
     conn = None
@@ -1035,19 +944,6 @@ async def churn_risk():
     if isinstance(data, dict) and "error" in data:
         logger.error(f"Problem serving /churn-risk: {data['error']}")
         raise HTTPException(status_code=500, detail=f"Couldn't get data: {data['error']}")
-    return data
-
-@app.get("/association-rules")
-async def association_rules_endpoint(): 
-    # Returns the Apriori rules
-    data = precomputed_data.get("association-rules")
-    if data is None: 
-        logger.warning("'/association-rules' data not ready yet.")
-        raise HTTPException(status_code=503, detail="Data is still calculating, try again soon!")
-    if isinstance(data, dict) and "error" in data: 
-        logger.error(f"Problem serving /association-rules: {data['error']}")
-        raise HTTPException(status_code=500, detail=f"Couldn't get data: {data['error']}")
-    # Empty list is okay, frontend should handle it
     return data
 
 # --- Run the App! --- 

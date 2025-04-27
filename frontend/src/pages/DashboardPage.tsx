@@ -11,7 +11,6 @@ import {
     ChurnRiskCustomer,
     ChurnRiskData,
     SummaryCount,
-    AssociationRule
 } from '../types/dashboardData';
 
 // Import Chart Components
@@ -20,7 +19,6 @@ import SimpleLineChart from '../components/charts/SimpleLineChart';
 import SimplePieChart from '../components/charts/SimplePieChart';
 import FrequentPairsTable from '../components/charts/FrequentPairsTable';
 import LoyaltyTrendsChart from '../components/charts/LoyaltyTrendsChart';
-import AssociationRulesTable from '../components/charts/AssociationRulesTable';
 // Import react-select
 import Select, { MultiValue, StylesConfig } from 'react-select';
 import { ResponsiveContainer, BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
@@ -169,7 +167,6 @@ const DashboardPage: React.FC = () => {
   const popularProducts = useFetchDashboardData<PopularProduct[]>('/popular-products');
   const seasonalTrends = useFetchDashboardData<SeasonalTrend[]>('/seasonal-trends');
   const churnRisk = useFetchDashboardData<ChurnRiskData>('/churn-risk');
-  const associationRules = useFetchDashboardData<AssociationRule[]>('/association-rules');
 
   // Format seasonal data
   const formatSeasonalData = (data: SeasonalTrend[] | null) => {
@@ -413,11 +410,6 @@ const DashboardPage: React.FC = () => {
           />
         </ChartWrapper>
 
-        {/* --- NEW: Association Rules Card --- */}
-        <ChartWrapper title="Top Association Rules (If... Then...)" fetchState={associationRules}>
-            <AssociationRulesTable data={associationRules.data || []} />
-        </ChartWrapper>
-
         {/* --- ML PREDICTION CARD --- */}
         <div className="mb-6 p-5 border rounded-lg bg-gradient-to-br from-gray-800 to-gray-900 shadow-md col-span-1 md:col-span-2">
           <h3 className="text-lg font-semibold mb-3 text-indigo-400">Predict Customer Lifetime Value (CLV)</h3>
@@ -517,7 +509,7 @@ const DashboardPage: React.FC = () => {
 
       {/* --- Churn Risk Section --- */}
       <div className="mt-12">
-        <h2 className="text-2xl font-bold mb-6 text-red-700 border-b pb-3 border-red-200">Customer Churn Risk (Inactive &gt; 8 Weeks)</h2>
+        <h2 className="text-2xl font-bold mb-6 text-red-700 border-b pb-3 border-red-200">Customer Churn Risk (Inactive > 8 Weeks)</h2>
         
         {/* --- Churn Summary Charts --- */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
