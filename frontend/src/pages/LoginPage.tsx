@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate, useLocation } from 'react-router-dom';
 
-const API_BASE_URL = 'https://dev-cc-frip.onrender.com'; // Updated URL - Move to config/env later
+const API_BASE_URL = 'https://ccproj.onrender.com'; // Updated URL - Move to config/env later
 
 const LoginPage: React.FC = () => {
   const [isRegistering, setIsRegistering] = useState(false);

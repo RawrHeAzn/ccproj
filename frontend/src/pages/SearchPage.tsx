@@ -13,7 +13,7 @@ interface SearchResult {
   Units: number;
 }
 
-const API_BASE_URL = 'https://dev-cc-frip.onrender.com'; // Updated URL
+const API_BASE_URL = 'https://ccproj.onrender.com'; // Updated URL
 
 const SearchPage: React.FC = () => {
   const [hshdNum, setHshdNum] = useState<string>('');

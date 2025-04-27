@@ -11,7 +11,7 @@ interface FileUploadState {
 // Type for overall process state
 type UploadStep = 'households' | 'products' | 'transactions' | 'done';
 
-const API_BASE_URL = 'https://dev-cc-frip.onrender.com'; // Updated URL
+const API_BASE_URL = 'https://ccproj.onrender.com'; // Updated URL
 
 const DataUploadPage: React.FC = () => {
   const { token } = useAuth();

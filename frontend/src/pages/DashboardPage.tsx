@@ -40,7 +40,7 @@ function useFetchDashboardData<T>(endpoint: string): FetchState<T> {
     error: null,
   });
   const { token } = useAuth();
-  const API_BASE_URL = 'https://dev-cc-frip.onrender.com';
+  const API_BASE_URL = 'https://ccproj.onrender.com';
 
   useEffect(() => {
     if (!token) {
@@ -133,7 +133,7 @@ const DashboardPage: React.FC = () => {
   const [basketPredictError, setBasketPredictError] = useState<string | null>(null);
   const [featuresLoading, setFeaturesLoading] = useState(true);
   const { token } = useAuth(); // Get token for API calls
-  const API_BASE_URL = 'https://dev-cc-frip.onrender.com'; // Updated URL
+  const API_BASE_URL = 'https://ccproj.onrender.com'; // Updated URL in component scope
   
   // Fetch available features for the basket predictor
   useEffect(() => {
