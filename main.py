@@ -19,6 +19,7 @@ from contextlib import asynccontextmanager # for startup/shutdown events
 from mlxtend.frequent_patterns import apriori, association_rules
 from mlxtend.preprocessing import TransactionEncoder
 import asyncio # For triggering background tasks
+import gc # Import garbage collector
 
 # Setup logging so we can see messages in the console
 logging.basicConfig(level=logging.INFO)
@@ -349,25 +350,34 @@ def _fetch_association_rules(conn, min_support=0.01, min_confidence=0.1, top_n=1
         WHERE p.COMMODITY IS NOT NULL AND p.COMMODITY <> '' -- ignore missing commodity names
     '''
     try:
-        df_trans = pd.read_sql(query, conn)
+        # Specify dtype for COMMODITY to save memory
+        df_trans = pd.read_sql(query, conn, dtype={'COMMODITY': 'category'})
         if df_trans.empty:
             logger.warning("No transaction data for Apriori?")
             return []
 
         # Group commodities by basket
         basket_groups = df_trans.groupby('BASKET_NUM')['COMMODITY'].apply(list).values.tolist()
-        
+        del df_trans # Free memory
+        gc.collect()
+
         # Apriori only cares IF an item is present, not how many. So get unique items per basket.
         basket_sets = [list(set(basket)) for basket in basket_groups]
+        del basket_groups # Free memory
+        gc.collect()
 
         # Need to transform the data into a big matrix (True/False for each item in each basket)
         te = TransactionEncoder()
         te_ary = te.fit(basket_sets).transform(basket_sets)
         df_encoded = pd.DataFrame(te_ary, columns=te.columns_)
+        del basket_sets, te_ary # Free memory
+        gc.collect()
 
         # Run Apriori algorithm to find itemsets that appear frequently together
         logger.info(f"Running Apriori on {len(df_encoded)} baskets, {len(df_encoded.columns)} items...")
         frequent_itemsets = apriori(df_encoded, min_support=min_support, use_colnames=True)
+        del df_encoded # Free memory after apriori
+        gc.collect()
         
         if frequent_itemsets.empty:
             logger.warning(f"No frequent itemsets found with support > {min_support}. Maybe lower it?")
@@ -376,6 +386,8 @@ def _fetch_association_rules(conn, min_support=0.01, min_confidence=0.1, top_n=1
         logger.info(f"Found {len(frequent_itemsets)} frequent itemsets. Now making rules...")
         # Generate rules like "If {A} then {B}"
         rules = association_rules(frequent_itemsets, metric="confidence", min_threshold=min_confidence)
+        del frequent_itemsets # Free memory
+        gc.collect()
 
         if rules.empty:
             logger.warning(f"No rules found with confidence > {min_confidence}. Maybe lower it?")
@@ -395,10 +407,22 @@ def _fetch_association_rules(conn, min_support=0.01, min_confidence=0.1, top_n=1
         rules_output = rules_output.round(4)
         
         logger.info(f"Generated {len(rules_output)} association rules. Nice!")
+        # Clean up final large object before returning
+        del rules
+        gc.collect()
         return rules_output.to_dict(orient='records')
 
     except Exception as e:
         logger.error(f"Apriori blew up! Error: {e}")
+        # Ensure cleanup on error too
+        if 'df_trans' in locals(): del df_trans
+        if 'basket_groups' in locals(): del basket_groups
+        if 'basket_sets' in locals(): del basket_sets
+        if 'te_ary' in locals(): del te_ary
+        if 'df_encoded' in locals(): del df_encoded
+        if 'frequent_itemsets' in locals(): del frequent_itemsets
+        if 'rules' in locals(): del rules
+        gc.collect()
         return [] # return empty list if it fails
 
 # --- Background Task Setup --- 
@@ -458,6 +482,7 @@ async def update_dashboard_data():
             logger.info("Closed DB connection for background task.")
         dashboard_update_in_progress = False # Reset flag
         logger.info("Background task finished updating dashboard data.")
+        gc.collect() # Collect garbage after background task finishes
 
 # Tell the scheduler to run the update function every hour
 scheduler.add_job(update_dashboard_data, 'interval', hours=1, id='dashboard_update_job')
@@ -676,11 +701,41 @@ async def get_prediction_features():
 
 # --- Data Upload Endpoints --- 
 
+# Define dtypes for tables to optimize memory during upload/read
+TABLE_DTYPES = {
+    'transactions': {
+        'HSHD_NUM': 'int32', 
+        'BASKET_NUM': 'int64', # Assuming basket numbers can be large
+        # 'DATE': 'str', # Let pandas parse dates, then convert
+        'PRODUCT_NUM': 'int64', # Assuming product numbers can be large
+        'SPEND': 'float32',
+        'UNITS': 'int16', # Assuming units are small integers
+        'YEAR': 'int16',
+        'WEEK_NUM': 'int8'
+    },
+    'households': {
+        'HSHD_NUM': 'int32',
+        'LOYALTY_FLAG': 'category',
+        'INCOME_RANGE': 'category',
+        'HSHD_SIZE': 'category', # Could be int8 if treated numerically later
+        'CHILDREN': 'category' # Could be int8 if treated numerically later
+    },
+    'products': {
+        'PRODUCT_NUM': 'int64',
+        'DEPARTMENT': 'category',
+        'COMMODITY': 'category',
+        'BRAND_TY': 'category',
+        'NATURAL_ORGANIC_FLAG': 'category'
+    }
+}
+
 # Helper function to process uploaded CSV and append new data
 async def _process_upload(file: UploadFile, table_name: str, engine):
     logger.info(f"Attempting to process uploaded file for table: {table_name}")
     contents = await file.read()
     data_io = io.BytesIO(contents)
+    CHUNKSIZE = 5000 # Process 5000 rows at a time
+    rows_appended_total = 0
     
     # Define primary key columns for each table (adjust if needed!)
     pk_columns = {
@@ -694,84 +749,122 @@ async def _process_upload(file: UploadFile, table_name: str, engine):
         raise HTTPException(status_code=500, detail=f"Server configuration error: PK missing for {table_name}")
         
     current_pk = pk_columns[table_name]
-    
+    table_dtypes = TABLE_DTYPES.get(table_name, None)
+
     try:
-        df = pd.read_csv(data_io)
-        logger.info(f"Successfully read {len(df)} rows from uploaded CSV for {table_name}.")
+        logger.info(f"Reading CSV for {table_name} in chunks of {CHUNKSIZE}...")
+        # Use context manager for engine connection
+        with engine.connect() as connection:
+            for chunk_df in pd.read_csv(data_io, chunksize=CHUNKSIZE, dtype=table_dtypes):
+                logger.info(f"Processing chunk with {len(chunk_df)} rows for {table_name}.")
+                df = chunk_df # Rename for consistency with old code logic
+                
+                # Ensure date column is in a consistent format if it's part of the PK
+                if 'DATE' in df.columns and 'DATE' in current_pk:
+                    try:
+                        df['DATE'] = pd.to_datetime(df['DATE']).dt.strftime('%Y-%m-%d')
+                    except Exception as date_err:
+                        logger.warning(f"Could not standardize DATE column format in chunk: {date_err}. PK matching might be affected.")
+
+                # --- Check for existing primary keys within the chunk --- 
+                df_new = df # Assume all rows are new initially
+                if not df.empty and current_pk:
+                    logger.info(f"Checking for existing primary keys ({', '.join(current_pk)}) in chunk...")
+                    
+                    # Create tuples of PK values from the current chunk
+                    try:
+                        # Ensure PK columns exist in the chunk before trying to access
+                        missing_cols = [col for col in current_pk if col not in df.columns]
+                        if missing_cols:
+                            logger.error(f"Uploaded CSV chunk for {table_name} is missing primary key column(s): {missing_cols}")
+                            # Skip this chunk or raise error? Skipping for now.
+                            continue # Move to the next chunk
+                        
+                        pk_tuples_from_df = [tuple(x) for x in df[current_pk].to_numpy()]
+                    except KeyError as key_err:
+                        logger.error(f"Chunk processing error: {key_err}") # Should be caught above
+                        continue
+                        
+                    if pk_tuples_from_df:
+                        # Build query to check ONLY the keys in this chunk
+                        # Constructing the WHERE clause carefully for multiple PKs
+                        pk_conditions = []
+                        params = {}
+                        if len(current_pk) == 1:
+                            col_name = current_pk[0]
+                            placeholders = ', '.join([f':pk_{i}' for i in range(len(pk_tuples_from_df))])
+                            pk_conditions.append(f"[{col_name}] IN ({placeholders})")
+                            params = {f'pk_{i}': val[0] for i, val in enumerate(pk_tuples_from_df)}
+                        else:
+                            # Handle composite keys (more complex, requires multiple OR conditions)
+                            condition_parts = []
+                            for i, pk_tuple in enumerate(pk_tuples_from_df):
+                                tuple_cond = []
+                                for j, col_name in enumerate(current_pk):
+                                    param_name = f':pk_{i}_{j}'
+                                    tuple_cond.append(f"[{col_name}] = {param_name}")
+                                    params[param_name] = pk_tuple[j]
+                                condition_parts.append(f"({' AND '.join(tuple_cond)})")
+                            pk_conditions.append(f"({' OR '.join(condition_parts)})")
+                        
+                        existing_keys_query = f"SELECT DISTINCT {', '.join([f'[{col}]' for col in current_pk])} FROM {table_name} WHERE {' AND '.join(pk_conditions)}"
+                        
+                        existing_keys_set = set()
+                        try:
+                            existing_keys_df = pd.read_sql(text(existing_keys_query), connection, params=params)
+                            if not existing_keys_df.empty:
+                                if 'DATE' in existing_keys_df.columns and 'DATE' in current_pk:
+                                    try:
+                                        existing_keys_df['DATE'] = pd.to_datetime(existing_keys_df['DATE']).dt.strftime('%Y-%m-%d')
+                                    except Exception as date_err_db:
+                                        logger.warning(f"Could not standardize DATE column from DB during PK check: {date_err_db}. PK matching might be affected.")
+                                existing_keys_set = set(tuple(x) for x in existing_keys_df.to_numpy())
+                            del existing_keys_df # Free memory
+                        except Exception as db_err:
+                             logger.error(f"Database error checking existing keys for chunk: {db_err}")
+                             # Decide how to handle: skip chunk, raise error? Skipping for now.
+                             continue 
+
+                        # Filter the chunk
+                        if existing_keys_set:
+                            mask = df.apply(lambda row: tuple(row[current_pk]) not in existing_keys_set, axis=1)
+                            df_new = df[mask]
+                            logger.info(f"Chunk filtering: Kept {len(df_new)} of {len(df)} rows.")
+                        else:
+                            logger.info("No existing keys found for this chunk's PKs.")
+                            df_new = df # All rows in chunk are new
+                    
+                # --- Append only the new rows from the chunk --- 
+                rows_in_chunk_to_append = 0
+                if not df_new.empty:
+                    try:
+                        # Use the connection from the context manager
+                        df_new.to_sql(table_name, con=connection, if_exists='append', index=False, chunksize=1000) # Use internal chunking for SQL write too
+                        rows_in_chunk_to_append = len(df_new)
+                        rows_appended_total += rows_in_chunk_to_append
+                        logger.info(f"Successfully appended {rows_in_chunk_to_append} new rows from chunk to table: {table_name}")
+                    except Exception as append_err:
+                         logger.error(f"Error appending chunk data to {table_name}: {append_err}")
+                         # Decide how to handle: stop processing, skip chunk? Stopping for now.
+                         raise HTTPException(status_code=500, detail=f"Error writing data chunk to {table_name}.")
+                else:
+                    logger.info(f"No new rows to append from this chunk to {table_name}.")
+                
+                # Clean up chunk DataFrames
+                del df, df_new, chunk_df
+                gc.collect()
         
-        # Ensure date column is in a consistent format if it's part of the PK
-        if 'DATE' in df.columns and 'DATE' in current_pk:
-            try:
-                # Attempt to convert to YYYY-MM-DD format for comparison
-                df['DATE'] = pd.to_datetime(df['DATE']).dt.strftime('%Y-%m-%d')
-            except Exception as date_err:
-                 logger.warning(f"Could not standardize DATE column format: {date_err}. PK matching might be affected.")
-                 # Proceed anyway, but be aware of potential mismatches
-
-        # --- Check for existing primary keys --- 
-        if not df.empty and current_pk:
-            logger.info(f"Checking for existing primary keys ({', '.join(current_pk)}) in table {table_name}...")
-            # Create tuples of PK values from the DataFrame for efficient lookup
-            # Handle potential errors if PK columns are missing in the CSV
-            try:
-                pk_tuples_from_df = [tuple(x) for x in df[current_pk].to_numpy()]
-            except KeyError as key_err:
-                 logger.error(f"Uploaded CSV for {table_name} is missing primary key column: {key_err}")
-                 raise HTTPException(status_code=400, detail=f"CSV file missing required column(s): {key_err}")
-
-            # --- Simplified Approach: Fetch all existing keys --- 
-            # Query all existing primary keys from the database table
-            logger.info(f"Fetching all existing keys from DB table {table_name}...")
-            all_existing_keys_query = f"SELECT DISTINCT {', '.join([f'[{col}]' for col in current_pk])} FROM {table_name}" 
-            existing_keys_set = set()
-            # --- Get connection inside the block --- 
-            with engine.connect() as connection: 
-                existing_keys_df = pd.read_sql(all_existing_keys_query, connection)
-                # Convert results to a set of tuples for fast lookup
-                if not existing_keys_df.empty:
-                   # Ensure date column is stringified if present for proper comparison
-                   if 'DATE' in existing_keys_df.columns and 'DATE' in current_pk: 
-                       try:
-                           existing_keys_df['DATE'] = pd.to_datetime(existing_keys_df['DATE']).dt.strftime('%Y-%m-%d')
-                       except Exception as date_err_db:
-                            logger.warning(f"Could not standardize DATE column from DB: {date_err_db}. PK matching might be affected.")
-                   existing_keys_set = set(tuple(x) for x in existing_keys_df.to_numpy())
-            logger.info(f"Found {len(existing_keys_set)} unique existing primary keys in {table_name}.")
-            # --- End Simplified Approach ---
-
-            # Create a boolean mask: True if the row's PK tuple is NOT in the existing set
-            if existing_keys_set:
-                mask = df.apply(lambda row: tuple(row[current_pk]) not in existing_keys_set, axis=1)
-                original_rows = len(df)
-                df_new = df[mask]
-                rows_to_append = len(df_new)
-                logger.info(f"Filtered out {original_rows - rows_to_append} rows with existing primary keys. Appending {rows_to_append} new rows.")
-            else:
-                 df_new = df # No existing keys found, append everything
-                 logger.info("No existing keys found in DB or table is empty. Appending all rows.")
-        else:
-             df_new = df # Append all if df is empty or no PK defined (though PK check runs first)
-
-        # --- Append only the new rows --- 
-        if not df_new.empty:
-            def append_new_data():
-                # --- Get connection inside the threadpool function --- 
-                with engine.connect() as connection:
-                    df_new.to_sql(table_name, con=connection, if_exists='append', index=False, chunksize=1000)
-                    logger.info(f"Successfully appended {len(df_new)} new rows to table: {table_name}")
-            
-            await run_in_threadpool(append_new_data)
-        else:
-             logger.info(f"No new rows to append to {table_name} after filtering.")
-
-        # --- Trigger dashboard update --- (Moved outside the try block)
+        logger.info(f"Finished processing all chunks for {table_name}. Total rows appended: {rows_appended_total}")
+        # --- Trigger dashboard update after all chunks are processed --- 
         try:
             logger.info(f"Triggering immediate run of dashboard update job after {table_name} processing.")
+            # Need to run the async function correctly from sync context or ensure scheduler runs it
+            # For simplicity, assuming scheduler handles async job correctly or use asyncio.create_task if needed
             scheduler.run_job('dashboard_update_job', jobstore=None)
         except Exception as job_e:
             logger.error(f"Failed to trigger immediate dashboard update job: {job_e}")
             
-        return {"message": f"Processed upload for {table_name}. Appended {len(df_new) if 'df_new' in locals() else 0} new rows."}
+        return {"message": f"Processed upload for {table_name}. Appended {rows_appended_total} new rows."}
         
     except pd.errors.EmptyDataError:
         logger.error(f"Uploaded file for {table_name} is empty.")
@@ -783,12 +876,12 @@ async def _process_upload(file: UploadFile, table_name: str, engine):
          raise http_exc
     except Exception as e:
         logger.error(f"Failed to process upload for table {table_name}: {e}", exc_info=True)
-        # Don't close file here, finally block handles it
         raise HTTPException(status_code=500, detail=f"Server error processing file for {table_name}.")
     finally:
-        # Always close the file object
+        # Close the file object
         await file.close()
         logger.info(f"File object for {table_name} closed.")
+        gc.collect() # Collect garbage after upload processing finishes
 
 @app.post("/upload/transactions")
 async def upload_transactions(file: UploadFile = File(...)):
