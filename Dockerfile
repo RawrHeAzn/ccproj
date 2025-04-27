@@ -28,7 +28,7 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         unixodbc \
         unixodbc-dev \
-        unixodbc-bin \
+        # unixodbc-bin is included in unixodbc on Debian 12+ \
     # Install the driver AFTER apt lists are updated
     && ACCEPT_EULA=Y apt-get install -y --no-install-recommends msodbcsql18 && \
     # Configure odbcinst.ini using the base symlink name
