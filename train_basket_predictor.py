@@ -18,10 +18,10 @@ server = 'retail-sql-server22.database.windows.net'
 database = 'RetailDB22'
 username = 'retailadmin22'
 password = 'Datalord22'
-driver= '{ODBC Driver 17 for SQL Server}'
+driver= '{ODBC Driver 18 for SQL Server}'
 
 params = urllib.parse.quote_plus(
-    f"DRIVER={{ODBC Driver 17 for SQL Server}};"
+    f"DRIVER={{ODBC Driver 18 for SQL Server}};"
     f"SERVER={server};"
     f"DATABASE={database};"
     f"UID={username};"
