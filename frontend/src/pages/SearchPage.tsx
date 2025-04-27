@@ -21,7 +21,7 @@ const SearchPage: React.FC = () => {
   const [searched, setSearched] = useState(false); // Track if a search has been performed
 
   const { token } = useAuth(); // Get the auth token
-  const API_BASE_URL = 'https://dev-cc-omega.vercel.app';
+  const API_BASE_URL = 'https://dev-cc.onrender.com';
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();

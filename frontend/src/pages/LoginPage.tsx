@@ -15,7 +15,7 @@ const LoginPage: React.FC = () => {
   const location = useLocation();
   const from = location.state?.from?.pathname || "/dashboard"; // Redirect back or to search page
 
-  const API_BASE_URL = 'https://dev-cc-omega.vercel.app'; // Move to config/env later
+  const API_BASE_URL = 'https://dev-cc.onrender.com'; // Move to config/env later
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
