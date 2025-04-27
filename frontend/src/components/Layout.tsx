@@ -27,16 +27,15 @@ const Layout: React.FC = () => {
               <span className="flex-shrink-0 flex items-center text-2xl font-bold text-white mr-8">
                 Retail Portal
               </span>
-              <div className="flex space-x-8">
+              <div className="flex space-x-4">
                 {navLinks.map((link) => (
                   <Link
                     key={link.href}
                     to={link.href}
-                    className={`inline-flex items-center pt-1 border-b-2 text-base font-medium rounded-t-md transition-colors duration-150 ease-in-out 
+                    className={`inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-400 transition-colors duration-150 ease-in-out 
                        ${location.pathname.startsWith(link.href)
-                        ? 'border-white text-white bg-indigo-700/50'
-                        : 'border-transparent text-indigo-100 hover:border-indigo-200 hover:text-white hover:bg-indigo-500/75'}`}
-                    style={{ paddingLeft: '1rem', paddingRight: '1rem' }}
+                        ? 'bg-white text-indigo-700'
+                        : 'text-indigo-100 bg-indigo-600 hover:bg-indigo-500'}`}
                     aria-current={location.pathname.startsWith(link.href) ? 'page' : undefined}
                   >
                     {link.text}

@@ -851,6 +851,9 @@ async def _process_upload(file: UploadFile, table_name: str, engine):
                     try:
                         # Use the connection from the context manager
                         df_new.to_sql(table_name, con=connection, if_exists='append', index=False, chunksize=1000) # Use internal chunking for SQL write too
+                        # --- Explicitly commit the transaction for this chunk --- 
+                        connection.commit() 
+                        # --- End Explicit Commit --- 
                         rows_in_chunk_to_append = len(df_new)
                         rows_appended_total += rows_in_chunk_to_append
                         logger.info(f"Successfully appended {rows_in_chunk_to_append} new rows from chunk to table: {table_name}")
