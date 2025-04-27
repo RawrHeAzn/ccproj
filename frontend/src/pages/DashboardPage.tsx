@@ -509,7 +509,7 @@ const DashboardPage: React.FC = () => {
 
       {/* --- Churn Risk Section --- */}
       <div className="mt-12">
-        <h2 className="text-2xl font-bold mb-6 text-red-700 border-b pb-3 border-red-200">Customer Churn Risk (Inactive > 8 Weeks)</h2>
+        <h2 className="text-2xl font-bold mb-6 text-red-700 border-b pb-3 border-red-200">Customer Churn Risk (Inactive {">"} 8 Weeks)</h2>
         
         {/* --- Churn Summary Charts --- */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
