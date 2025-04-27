@@ -32,7 +32,11 @@ const Layout: React.FC = () => {
                   <Link
                     key={link.href}
                     to={link.href}
-                    className={`inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md transition-colors duration-150 ease-in-out bg-red-500 text-white`}
+                    className={`inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md transition-colors duration-150 ease-in-out 
+                       ${location.pathname.startsWith(link.href)
+                        ? 'bg-white text-indigo-700' // Active state
+                        : 'text-indigo-100 bg-indigo-600 hover:bg-indigo-500 hover:text-white' // Inactive state
+                       }`}
                     aria-current={location.pathname.startsWith(link.href) ? 'page' : undefined}
                   >
                     {link.text}
