@@ -3,8 +3,8 @@ import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext'; // Import useAuth
 
 const navLinks = [
-  { href: '/search', text: 'Search' },
   { href: '/dashboard', text: 'Dashboard' },
+  { href: '/search', text: 'Search' },
   { href: '/upload-data', text: 'Upload Data' }, // Add link for data upload
 ];
 
@@ -27,7 +27,7 @@ const Layout: React.FC = () => {
               <span className="flex-shrink-0 flex items-center text-2xl font-bold text-white mr-8">
                 Retail Portal
               </span>
-              <div className="flex space-x-4">
+              <div className="flex space-x-6">
                 {navLinks.map((link) => (
                   <Link
                     key={link.href}
