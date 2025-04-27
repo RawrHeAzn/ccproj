@@ -11,40 +11,38 @@ ENV ODBCSYSINI=/etc
 # Update path for ODBC Driver 18
 ENV LD_LIBRARY_PATH=/opt/microsoft/msodbcsql18/lib64:${LD_LIBRARY_PATH}
 
-# Install prerequisites including tools needed for adding repo and unixodbc
+# Install prerequisites and tools for adding repo
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
+        ca-certificates \
         curl \
         gnupg \
-        unixodbc \
-        unixodbc-dev \
-        unixodbc-bin \
-        # lsb-release is needed if dynamically detecting debian version, but we hardcode 12
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Add Microsoft GPG key and repository for Debian 12 (Bookworm)
 RUN curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor -o /usr/share/keyrings/microsoft-prod.gpg && \
     curl -fsSL https://packages.microsoft.com/config/debian/12/prod.list > /etc/apt/sources.list.d/mssql-release.list
 
-# Install Microsoft ODBC Driver 18
+# Install unixodbc, ODBC Driver 18, and configure
 RUN apt-get update && \
-    ACCEPT_EULA=Y apt-get install -y --no-install-recommends msodbcsql18 && \
-    # Configure odbcinst.ini for Driver 18
-    printf "[ODBC Driver 18 for SQL Server]\nDescription=Microsoft ODBC Driver 18 for SQL Server\nDriver=/opt/microsoft/msodbcsql18/lib64/libmsodbcsql-18.1.so.1.1\nUsageCount=1\n" > /etc/odbcinst.ini && \
-    # Verify the driver path exists (optional sanity check)
-    # ls -l /opt/microsoft/msodbcsql18/lib64/libmsodbcsql-18.1.so.1.1 && \
+    apt-get install -y --no-install-recommends \
+        unixodbc \
+        unixodbc-dev \
+        unixodbc-bin \
+    # Install the driver AFTER apt lists are updated
+    && ACCEPT_EULA=Y apt-get install -y --no-install-recommends msodbcsql18 && \
+    # Configure odbcinst.ini using the base symlink name
+    printf "[ODBC Driver 18 for SQL Server]\nDescription=Microsoft ODBC Driver 18 for SQL Server\nDriver=/opt/microsoft/msodbcsql18/lib64/libmsodbcsql-18.so\nUsageCount=1\n" > /etc/odbcinst.ini && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Set the working directory in the container
 WORKDIR /app
 
-# Copy just the requirements file first to leverage Docker cache
+# Copy requirements first for caching
 COPY requirements.txt .
-
-# Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the rest of the application code into the container
+# Copy application code
 COPY . .
 
 # Expose the port the app runs on
