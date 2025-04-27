@@ -85,6 +85,9 @@ params = urllib.parse.quote_plus(
     f"DATABASE={database};"
     f"UID={username};"
     f"PWD={password};"
+    f"Encrypt=yes;"                # 🔥 Must add this
+    f"TrustServerCertificate=no;"  # 🔥 And this (no skipping certs)
+    f"Connection Timeout=30;"       # 🔥 Optional good practice
 )
 # The SQLAlchemy engine - needed for pandas read_sql
 engine = create_engine(f"mssql+pyodbc:///?odbc_connect={params}", fast_executemany=True)
