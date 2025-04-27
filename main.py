@@ -430,7 +430,7 @@ precomputed_data = {} # dictionary to hold all the data for the dashboard charts
 scheduler = BackgroundScheduler(daemon=True) # runs in the background
 
 # This function runs periodically to refresh the dashboard data
-async def update_dashboard_data():
+def update_dashboard_data():
     global dashboard_update_in_progress
     if dashboard_update_in_progress:
         logger.warning("Dashboard update already in progress, skipping scheduled run.")
