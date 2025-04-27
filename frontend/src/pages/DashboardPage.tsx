@@ -30,77 +30,128 @@ interface FetchState<T> {
   data: T | null;
   loading: boolean;
   error: string | null;
+  isCalculating: boolean; // NEW state to track 503 status
 }
 
-// Custom hook for fetching data
-function useFetchDashboardData<T>(endpoint: string): FetchState<T> {
+// Custom hook for fetching data with retry on 503
+function useFetchDashboardData<T>(endpoint: string, retryDelay = 5000, maxRetries = 12): FetchState<T> {
   const [state, setState] = useState<FetchState<T>>({
     data: null,
     loading: true,
     error: null,
+    isCalculating: false, // Initialize
   });
   const { token } = useAuth();
-  // Define base URL - ensure no trailing slash
   const API_BASE_URL = 'https://ccproj.onrender.com'.replace(/\/$/, ''); 
+  const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
     if (!token) {
-      setState({ data: null, loading: false, error: 'Authentication token not found.' });
+      setState({ data: null, loading: false, error: 'Authentication token not found.', isCalculating: false });
       return;
     }
 
-    const fetchData = async () => {
-      setState({ data: null, loading: true, error: null });
-      try {
-        // Ensure endpoint doesn't start with /
-        const cleanEndpoint = endpoint.startsWith('/') ? endpoint.substring(1) : endpoint;
-        // Construct URL robustly
-        const fullUrl = `${API_BASE_URL}/${cleanEndpoint}`;
-        
-        // Use console.log for frontend logging
-        console.log(`Fetching from: ${fullUrl}`); 
+    let isMounted = true; // Track if component is still mounted
+    let timeoutId: NodeJS.Timeout | null = null; // Track retry timeout
 
+    const fetchData = async () => {
+      // Don't reset loading to true on retries, keep showing calculating state
+      if (retryCount === 0) {
+           setState(prev => ({ ...prev, loading: true, error: null, isCalculating: false }));
+      }
+      
+      // Construct URL
+      const cleanEndpoint = endpoint.startsWith('/') ? endpoint.substring(1) : endpoint;
+      const fullUrl = `${API_BASE_URL}/${cleanEndpoint}`;
+      console.log(`Fetching from: ${fullUrl} (Attempt: ${retryCount + 1})`);
+
+      try {
         const response = await fetch(fullUrl, {
           headers: { 'Authorization': `Bearer ${token}` },
         });
+
+        // --- Handle 503: Data Not Ready --- 
+        if (response.status === 503) {
+            console.log(`Received 503 for ${endpoint}, will retry...`);
+            if (isMounted && retryCount < maxRetries) {
+                setState(prev => ({ ...prev, loading: false, error: null, isCalculating: true })); 
+                // Schedule retry
+                timeoutId = setTimeout(() => setRetryCount(prev => prev + 1), retryDelay);
+            } else if (isMounted) {
+                 // Max retries reached
+                 setState(prev => ({ ...prev, loading: false, error: `Data for ${endpoint} did not become available after ${maxRetries} retries.`, isCalculating: false }));
+            }
+            return; // Stop processing this fetch attempt
+        }
+
+        // --- Handle other errors --- 
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({ detail: `HTTP error! status: ${response.status}` }));
           throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
         }
+
+        // --- Handle Success (200 OK) --- 
         const jsonData = await response.json();
-        setState({ data: jsonData, loading: false, error: null });
+        if (isMounted) {
+            setState({ data: jsonData, loading: false, error: null, isCalculating: false });
+            // No need to retry further
+        }
+
       } catch (err) {
+        // --- Handle Fetch/Network Errors --- 
         let errorMessage = 'An unknown error occurred.';
         if (err instanceof Error) {
           errorMessage = err.message;
         }
-        setState({ data: null, loading: false, error: `Failed to fetch ${endpoint}: ${errorMessage}` });
+        if (isMounted) {
+             setState({ data: null, loading: false, error: `Failed to fetch ${endpoint}: ${errorMessage}`, isCalculating: false });
+             // Stop retrying on non-503 errors
+        }
       }
     };
 
+    // Initial fetch or retry fetch
     fetchData();
-  }, [token, endpoint]);
+
+    // Cleanup function
+    return () => {
+      isMounted = false; // Mark component as unmounted
+      if (timeoutId) {
+          clearTimeout(timeoutId); // Clear pending retry timeout
+      }
+    };
+    // Dependencies: trigger fetch on token change, endpoint change, or retry count change
+  }, [token, endpoint, retryCount, retryDelay, maxRetries]);
 
   return state;
 }
 
 // Wrapper to handle loading/error states before rendering chart
 const ChartWrapper: React.FC<{ title: string; fetchState: FetchState<unknown>; children: React.ReactNode }> = ({ title, fetchState, children }) => {
-  const { loading, error } = fetchState;
+  const { loading, error, isCalculating } = fetchState; // Use isCalculating state
   return (
     <div className="mb-6 p-5 border rounded-lg bg-gradient-to-br from-white to-gray-50 shadow-md min-h-[200px]">
       <h3 className="text-lg font-semibold mb-3 text-gray-700">{title}</h3>
+      {/* Show loading on initial load */}
       {loading && (
         <div className="flex items-center justify-center h-40">
           <p className="text-sm text-gray-500">Loading...</p>
         </div>
       )}
-      {error && (
+      {/* Show calculating message if retrying after 503 */}
+      {isCalculating && !loading && (
+          <div className="flex items-center justify-center h-40">
+              <p className="text-sm text-blue-600 animate-pulse">Calculating data, please wait...</p>
+          </div>
+      )}
+      {/* Show error only if not loading or calculating */}
+      {error && !loading && !isCalculating && (
         <div className="flex items-center justify-center h-40 p-4">
           <p className="text-sm text-red-600 text-center">Error: {error}</p>
         </div>
       )}
-      {!loading && !error && children}
+      {/* Show children only if data is loaded (not loading, not calculating, no error) */}
+      {!loading && !error && !isCalculating && children}
     </div>
   );
 };
