@@ -85,9 +85,9 @@ params = urllib.parse.quote_plus(
     f"DATABASE={database};"
     f"UID={username};"
     f"PWD={password};"
-    f"Encrypt=yes;"                # 🔥 Must add this
-    f"TrustServerCertificate=no;"  # 🔥 And this (no skipping certs)
-    f"Connection Timeout=30;"       # 🔥 Optional good practice
+    f"Encrypt=yes;"                # Added for Driver 18/Azure SQL
+    f"TrustServerCertificate=no;"  # Added for Driver 18/Azure SQL
+    f"Connection Timeout=30;"       # Optional: Added timeout
 )
 # The SQLAlchemy engine - needed for pandas read_sql
 engine = create_engine(f"mssql+pyodbc:///?odbc_connect={params}", fast_executemany=True)
@@ -104,7 +104,7 @@ def get_sqlalchemy_connection():
         return None # return None if it breaks
 
 # --- PyODBC Setup --- (older way, maybe needed for some specific stuff?)
-conn_str = f'DRIVER={driver};SERVER={server};PORT=1433;DATABASE={database};UID={username};PWD={password}'
+conn_str = f'DRIVER={driver};SERVER={server};PORT=1433;DATABASE={database};UID={username};PWD={password};Encrypt=yes;TrustServerCertificate=no;Connection Timeout=30'
 
 # Function to get a plain pyodbc connection
 def get_pyodbc_connection(): 

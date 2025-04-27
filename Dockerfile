@@ -8,23 +8,32 @@ ENV PYTHONUNBUFFERED=1
 ENV DEBIAN_FRONTEND=noninteractive
 # Tell ODBC where to find system-wide config
 ENV ODBCSYSINI=/etc
-# Ensure the ODBC library path is included
-ENV LD_LIBRARY_PATH=/opt/microsoft/msodbcsql17/lib64:${LD_LIBRARY_PATH}
+# Update path for ODBC Driver 18
+ENV LD_LIBRARY_PATH=/opt/microsoft/msodbcsql18/lib64:${LD_LIBRARY_PATH}
 
-# Install system dependencies including ODBC driver and tools
+# Install prerequisites including tools needed for adding repo and unixodbc
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends curl gnupg unixodbc unixodbc-dev unixodbc-bin && \
-    # Add Microsoft repository for ODBC driver
-    curl https://packages.microsoft.com/keys/microsoft.asc | apt-key add - && \
-    curl https://packages.microsoft.com/config/ubuntu/$(lsb_release -rs)/prod.list > /etc/apt/sources.list.d/mssql-release.list && \
-    apt-get update && \
-    # Install the ODBC driver, accepting the EULA
-    ACCEPT_EULA=Y apt-get install -y --no-install-recommends msodbcsql17 && \
-    # Configure odbcinst.ini
-    printf "[ODBC Driver 17 for SQL Server]\nDescription=Microsoft ODBC Driver 17 for SQL Server\nDriver=/opt/microsoft/msodbcsql17/lib64/libmsodbcsql-17.so\nUsageCount=1\n" > /etc/odbcinst.ini && \
-    # Clean up apt lists to reduce image size
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+    apt-get install -y --no-install-recommends \
+        curl \
+        gnupg \
+        unixodbc \
+        unixodbc-dev \
+        unixodbc-bin \
+        # lsb-release is needed if dynamically detecting debian version, but we hardcode 12
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Add Microsoft GPG key and repository for Debian 12 (Bookworm)
+RUN curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor -o /usr/share/keyrings/microsoft-prod.gpg && \
+    curl -fsSL https://packages.microsoft.com/config/debian/12/prod.list > /etc/apt/sources.list.d/mssql-release.list
+
+# Install Microsoft ODBC Driver 18
+RUN apt-get update && \
+    ACCEPT_EULA=Y apt-get install -y --no-install-recommends msodbcsql18 && \
+    # Configure odbcinst.ini for Driver 18
+    printf "[ODBC Driver 18 for SQL Server]\nDescription=Microsoft ODBC Driver 18 for SQL Server\nDriver=/opt/microsoft/msodbcsql18/lib64/libmsodbcsql-18.1.so.1.1\nUsageCount=1\n" > /etc/odbcinst.ini && \
+    # Verify the driver path exists (optional sanity check)
+    # ls -l /opt/microsoft/msodbcsql18/lib64/libmsodbcsql-18.1.so.1.1 && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Set the working directory in the container
 WORKDIR /app
