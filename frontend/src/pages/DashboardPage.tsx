@@ -362,6 +362,8 @@ const DashboardPage: React.FC = () => {
           <SimpleBarChart 
             data={topSpenders.data || []} 
             xAxisKey="Hshd_num" 
+            xAxisLabel="Household Number"
+            yAxisLabel="Total Spend"
             barDataKey="total_spend" 
             fillColor="#8884d8"
           />
@@ -375,6 +377,7 @@ const DashboardPage: React.FC = () => {
           <SimpleBarChart 
             data={engagementByIncome.data || []} 
             xAxisKey="income_bracket" 
+            yAxisLabel="Average Spend"
             barDataKey="avg_spend" 
             fillColor="#82ca9d"
           />
@@ -396,6 +399,8 @@ const DashboardPage: React.FC = () => {
           <SimpleBarChart 
             data={popularProducts.data || []} 
             xAxisKey="commodity" 
+            xAxisLabel="Commodity"
+            yAxisLabel="Total Spend"
             barDataKey="total_spend" 
             fillColor="#ffc658"
           />
@@ -518,6 +523,8 @@ const DashboardPage: React.FC = () => {
                <SimpleBarChart 
                  data={churnRisk.data.summary_stats.count_by_loyalty}
                  xAxisKey="loyalty_flag" 
+                 xAxisLabel="Loyalty Flag"
+                 yAxisLabel="Customer Count"
                  barDataKey="count" 
                  fillColor="#ef4444" // Red color for risk
                />
@@ -529,6 +536,8 @@ const DashboardPage: React.FC = () => {
                <SimpleBarChart 
                  data={churnRisk.data.summary_stats.count_by_income}
                  xAxisKey="income_range" 
+                 xAxisLabel="Income Range"
+                 yAxisLabel="Customer Count"
                  barDataKey="count" 
                  fillColor="#f87171" // Lighter red
                />

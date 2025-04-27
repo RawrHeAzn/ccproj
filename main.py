@@ -125,7 +125,7 @@ def _fetch_top_spenders(conn):
         SELECT TOP 10 HSHD_NUM, SUM(SPEND) AS total_spend
         FROM transactions
         GROUP BY HSHD_NUM
-        ORDER BY total_spend DESC;
+        ORDER BY total_spend ASC;
     '''
     df = pd.read_sql(query, conn)
     df = rename_columns(df, {'HSHD_NUM': 'Hshd_num'}) # match frontend naming
@@ -319,9 +319,30 @@ def _fetch_churn_risk(conn):
         # How many in each income group are at risk?
         income_counts = df['IncomeRange'].value_counts().reset_index()
         income_counts.columns = ['income_range', 'count']
-        summary_stats['count_by_income'] = income_counts.to_dict(orient='records')
         
-        # Could add more summaries here maybe?
+        # --- ADD SORTING FOR INCOME RANGE --- 
+        # Define the correct order (should match the one in _fetch_engagement_by_income)
+        income_order = [
+            '<25K', 
+            '25-34K',
+            '35-49K',
+            '50-74K', 
+            '75-99K', 
+            '100-149K', 
+            '150K+'
+        ]
+        # Convert to categorical and sort
+        income_counts['income_range'] = pd.Categorical(
+            income_counts['income_range'], 
+            categories=income_order, 
+            ordered=True
+        )
+        income_counts = income_counts.sort_values('income_range')
+        # Convert category back to string for JSON if needed (usually handled by to_dict)
+        # income_counts['income_range'] = income_counts['income_range'].astype(str)
+        # --- END SORTING --- 
+        
+        summary_stats['count_by_income'] = income_counts.to_dict(orient='records')
         
     except Exception as e:
         logger.error(f"Couldn't calculate churn summary stats: {e}")
