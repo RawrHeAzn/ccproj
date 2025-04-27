@@ -17,6 +17,7 @@ from apscheduler.schedulers.background import BackgroundScheduler # runs tasks o
 from contextlib import asynccontextmanager # for startup/shutdown events
 import asyncio # For triggering background tasks
 import gc # Import garbage collector
+import numpy as np # Added for numpy type checking
 
 # Setup logging so we can see messages in the console
 logging.basicConfig(level=logging.INFO)
@@ -731,36 +732,53 @@ async def _process_upload(file: UploadFile, table_name: str, engine):
                         if len(current_pk) == 1:
                             # Handle single primary key with IN clause
                             col_name = current_pk[0]
-                            # Convert numpy types to standard python types for the IN clause
-                            # Ensure we handle potential None values if PK could be nullable (though unlikely)
-                            pk_values = [val[0] for val in pk_list_from_df if val[0] is not None]
+                            pk_values = []
+                            for val_tuple in pk_list_from_df:
+                                val = val_tuple[0]
+                                if val is not None:
+                                    # Explicitly convert to standard Python int/float/str
+                                    if isinstance(val, (np.integer, np.int_)): 
+                                        pk_values.append(int(val))
+                                    elif isinstance(val, (np.floating, np.float_)): 
+                                        pk_values.append(float(val))
+                                    else:
+                                        pk_values.append(val) # Assume string or already compatible
+                            
                             if pk_values: # Only query if there are values
                                placeholders = ', '.join(['?' for _ in pk_values])
                                pk_conditions.append(f"[{col_name}] IN ({placeholders})")
                                params_list.extend(pk_values)
                             else:
-                                pk_conditions.append("1=0") # No valid keys to check, ensure query returns nothing
-                            
+                                pk_conditions.append("1=0") 
                         else:
                             # Handle composite keys (multiple OR conditions)
                             condition_parts = []
                             for pk_tuple in pk_list_from_df:
                                 tuple_cond = []
                                 valid_tuple = True
-                                for val in pk_tuple:
-                                    if val is None: # Skip tuples with None in composite PK
+                                current_tuple_params = []
+                                for idx, val in enumerate(pk_tuple):
+                                    if val is None: 
                                         valid_tuple = False
                                         break
-                                    tuple_cond.append(f"[{current_pk[len(tuple_cond)]}] = ?")
+                                    # Explicitly convert to standard Python types
+                                    param = val
+                                    if isinstance(val, (np.integer, np.int_)): 
+                                        param = int(val)
+                                    elif isinstance(val, (np.floating, np.float_)): 
+                                        param = float(val)
+                                    # Date strings are already str
+                                    current_tuple_params.append(param)
+                                    tuple_cond.append(f"[{current_pk[idx]}] = ?")
                                 
                                 if valid_tuple:
                                     condition_parts.append(f"({' AND '.join(tuple_cond)})")
-                                    params_list.extend(pk_tuple) # Add tuple values to the list
+                                    params_list.extend(current_tuple_params) # Add converted params for this tuple
                             
                             if condition_parts: # Only add condition if there are valid tuples
                                 pk_conditions.append(f"({' OR '.join(condition_parts)})")
                             else:
-                                pk_conditions.append("1=0") # No valid keys to check
+                                pk_conditions.append("1=0") 
                         
                         existing_keys_query_sql = f"SELECT DISTINCT {', '.join([f'[{col}]' for col in current_pk])} FROM {table_name} WHERE {' AND '.join(pk_conditions)}"
                         
