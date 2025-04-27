@@ -17,6 +17,7 @@ from apscheduler.schedulers.background import BackgroundScheduler # runs tasks o
 from contextlib import asynccontextmanager # for startup/shutdown events
 # Apriori stuff for finding item pairs
 from mlxtend.frequent_patterns import apriori, association_rules
+from mlxtend.frequent_patterns import fpgrowth
 from mlxtend.preprocessing import TransactionEncoder
 import asyncio # For triggering background tasks
 import gc # Import garbage collector
@@ -337,10 +338,10 @@ def _fetch_churn_risk(conn):
         "summary_stats": summary_stats
     }
 
-# --- Apriori Function --- (Finds which items are often bought together)
+# --- Association Rules Function (using FP-Growth) ---
 def _fetch_association_rules(conn, min_support=0.01, min_confidence=0.1, top_n=15):
-    # Uses the Apriori algorithm from mlxtend
-    logger.info(f"Let's find some association rules! (Support > {min_support}, Confidence > {min_confidence})")
+    # Uses the FP-Growth algorithm from mlxtend (more memory efficient)
+    logger.info(f"Let's find some association rules using FP-Growth! (Support > {min_support}, Confidence > {min_confidence})")
     query = '''
         SELECT 
             t.BASKET_NUM, 
@@ -353,7 +354,7 @@ def _fetch_association_rules(conn, min_support=0.01, min_confidence=0.1, top_n=1
         # Specify dtype for COMMODITY to save memory
         df_trans = pd.read_sql(query, conn, dtype={'COMMODITY': 'category'})
         if df_trans.empty:
-            logger.warning("No transaction data for Apriori?")
+            logger.warning("No transaction data for FP-Growth?")
             return []
 
         # Group commodities by basket
@@ -361,22 +362,21 @@ def _fetch_association_rules(conn, min_support=0.01, min_confidence=0.1, top_n=1
         del df_trans # Free memory
         gc.collect()
 
-        # Apriori only cares IF an item is present, not how many. So get unique items per basket.
+        # FP-Growth needs the data encoded into a boolean DataFrame
         basket_sets = [list(set(basket)) for basket in basket_groups]
         del basket_groups # Free memory
         gc.collect()
 
-        # Need to transform the data into a big matrix (True/False for each item in each basket)
         te = TransactionEncoder()
         te_ary = te.fit(basket_sets).transform(basket_sets)
         df_encoded = pd.DataFrame(te_ary, columns=te.columns_)
         del basket_sets, te_ary # Free memory
         gc.collect()
 
-        # Run Apriori algorithm to find itemsets that appear frequently together
-        logger.info(f"Running Apriori on {len(df_encoded)} baskets, {len(df_encoded.columns)} items...")
-        frequent_itemsets = apriori(df_encoded, min_support=min_support, use_colnames=True)
-        del df_encoded # Free memory after apriori
+        # Run FP-Growth algorithm to find itemsets that appear frequently together
+        logger.info(f"Running FP-Growth on {len(df_encoded)} baskets, {len(df_encoded.columns)} items...")
+        frequent_itemsets = fpgrowth(df_encoded, min_support=min_support, use_colnames=True)
+        del df_encoded # Free memory after fpgrowth
         gc.collect()
         
         if frequent_itemsets.empty:
@@ -393,27 +393,26 @@ def _fetch_association_rules(conn, min_support=0.01, min_confidence=0.1, top_n=1
             logger.warning(f"No rules found with confidence > {min_confidence}. Maybe lower it?")
             return []
             
-        # Sort rules by "lift" (how much more likely B is bought if A is bought)
+        # Sort rules by "lift"
         rules = rules.sort_values(by='lift', ascending=False)
         
-        # Convert the weird frozenset things to plain strings for the frontend
+        # Convert frozensets to strings
         rules['antecedents'] = rules['antecedents'].apply(lambda x: ', '.join(list(x)))
         rules['consequents'] = rules['consequents'].apply(lambda x: ', '.join(list(x)))
         
-        # Pick the columns we care about and only the top N rules
+        # Select output columns and top N rules
         rules_output = rules[['antecedents', 'consequents', 'support', 'confidence', 'lift']].head(top_n)
 
-        # Round the numbers to make them look nicer
+        # Round numbers
         rules_output = rules_output.round(4)
         
         logger.info(f"Generated {len(rules_output)} association rules. Nice!")
-        # Clean up final large object before returning
         del rules
         gc.collect()
         return rules_output.to_dict(orient='records')
 
     except Exception as e:
-        logger.error(f"Apriori blew up! Error: {e}")
+        logger.error(f"FP-Growth blew up! Error: {e}")
         # Ensure cleanup on error too
         if 'df_trans' in locals(): del df_trans
         if 'basket_groups' in locals(): del basket_groups
