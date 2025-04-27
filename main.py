@@ -725,94 +725,72 @@ async def _process_upload(file: UploadFile, table_name: str, engine):
                         continue
                         
                     if pk_list_from_df:
-                        # Build query to check ONLY the keys in this chunk
-                        existing_keys_set = set()
-
-                        if len(current_pk) == 1:
-                            # Handle single primary key with IN clause using pd.read_sql
-                            col_name = current_pk[0]
-                            pk_values = []
-                            for val_tuple in pk_list_from_df:
-                                val = val_tuple[0]
-                                if val is not None:
-                                    # Explicitly convert to standard Python types
-                                    if isinstance(val, (np.integer, np.int_)): 
-                                        pk_values.append(int(val))
-                                    # *** Use np.float64 for NumPy 2.0 compatibility ***
-                                    elif isinstance(val, (np.floating, np.float64)): 
-                                        pk_values.append(float(val))
-                                    else:
-                                        pk_values.append(val) 
+                        # Handle composite keys (multiple OR conditions) using connection.execute with NAMED parameters
+                        pk_conditions = []
+                        params_dict = {} # Use a dictionary for named parameters
+                        condition_parts = [] 
+                        
+                        param_counter = 0 # Counter for unique parameter names
+                        for i, pk_tuple in enumerate(pk_list_from_df):
+                            tuple_cond = []
+                            valid_tuple = True
+                            current_tuple_params = {}
+                            for j, val in enumerate(pk_tuple):
+                                if val is None: 
+                                    valid_tuple = False
+                                    break
+                                param_name = f":pk_{param_counter}" 
+                                param_counter += 1
+                                # Explicitly convert numpy types
+                                param_value = val
+                                if isinstance(val, (np.integer, np.int_)): 
+                                    param_value = int(val)
+                                elif isinstance(val, (np.floating, np.float64)): 
+                                    param_value = float(val)
+                                    
+                                current_tuple_params[param_name[1:]] = param_value # Add to dict (key without :) 
+                                tuple_cond.append(f"[{current_pk[j]}] = {param_name}") # Use named placeholder
                             
-                            if pk_values: # Only query if there are values
-                                placeholders = ', '.join([f':param_{i}' for i in range(len(pk_values))]) # Named params for read_sql
-                                existing_keys_query_sql = f"SELECT DISTINCT [{col_name}] FROM {table_name} WHERE [{col_name}] IN ({placeholders})"
-                                params_dict = {f'param_{i}': val for i, val in enumerate(pk_values)}
-                                
+                            if valid_tuple:
+                                condition_parts.append(f"({' AND '.join(tuple_cond)})")
+                                params_dict.update(current_tuple_params) # Add tuple params to main dict
+                        
+                        if condition_parts:
+                            pk_conditions.append(f"({' OR '.join(condition_parts)})")
+                            existing_keys_query_sql = f"SELECT DISTINCT {', '.join([f'[{col}]' for col in current_pk])} FROM {table_name} WHERE {' AND '.join(pk_conditions)}"
+                            
+                            # Only run query if there are parameters to bind
+                            if params_dict: 
                                 try:
-                                    # Use pd.read_sql for single key IN clause
-                                    existing_keys_df = pd.read_sql(text(existing_keys_query_sql), connection, params=params_dict)
-                                    if not existing_keys_df.empty:
-                                        # Convert to set of single values
-                                        existing_keys_set = set(existing_keys_df[col_name]) 
-                                    del existing_keys_df # Free memory
-                                except Exception as db_err:
-                                    logger.error(f"Database error checking existing keys (single key) for chunk: {db_err}")
-                                    logger.error(f"SQL: {existing_keys_query_sql}") 
-                                    logger.error(f"Params: {params_dict}") 
-                                    continue 
-                        else:
-                            # Handle composite keys (multiple OR conditions) using connection.execute
-                            # --- Initialize lists BEFORE the loop --- 
-                            pk_conditions = []
-                            params_list = [] 
-                            condition_parts = [] # <<< Initialize here
-                            
-                            for pk_tuple in pk_list_from_df:
-                                tuple_cond = []
-                                valid_tuple = True
-                                current_tuple_params = []
-                                for idx, val in enumerate(pk_tuple):
-                                    if val is None: 
-                                        valid_tuple = False
-                                        break
-                                    param = val
-                                    if isinstance(val, (np.integer, np.int_)): 
-                                        param = int(val)
-                                    # *** Use np.float64 for NumPy 2.0 compatibility ***
-                                    elif isinstance(val, (np.floating, np.float64)): 
-                                        param = float(val)
-                                    current_tuple_params.append(param)
-                                    tuple_cond.append(f"[{current_pk[idx]}] = ?")
-                                
-                                if valid_tuple:
-                                    condition_parts.append(f"({' AND '.join(tuple_cond)})")
-                                    params_list.extend(current_tuple_params) 
-                            
-                            if condition_parts:
-                                pk_conditions.append(f"({' OR '.join(condition_parts)})")
-                                existing_keys_query_sql = f"SELECT DISTINCT {', '.join([f'[{col}]' for col in current_pk])} FROM {table_name} WHERE {' AND '.join(pk_conditions)}"
-                                # Only run query if there are parameters to bind
-                                if params_list: 
-                                    try:
-                                        result = connection.execute(text(existing_keys_query_sql), params_list)
-                                        existing_keys_tuples = result.fetchall()
-                                        result.close() 
+                                    # Use NAMED parameters with execute
+                                    result = connection.execute(text(existing_keys_query_sql), params_dict)
+                                    existing_keys_tuples = result.fetchall()
+                                    result.close() 
+                                    
+                                    if existing_keys_tuples:
+                                        # Convert date columns if necessary 
+                                        converted_tuples = []
+                                        date_indices = [i for i, col in enumerate(current_pk) if col == 'DATE']
+                                        for K_tuple in existing_keys_tuples:
+                                            temp_list = list(K_tuple)
+                                            for idx in date_indices:
+                                                 if temp_list[idx] is not None:
+                                                     try:
+                                                          temp_list[idx] = pd.to_datetime(temp_list[idx]).strftime('%Y-%m-%d')
+                                                     except Exception as date_err_db:
+                                                          logger.warning(f"Could not standardize DATE column from DB during PK check: {date_err_db}.")
+                                            converted_tuples.append(tuple(temp_list))
+                                        existing_keys_set = set(converted_tuples)
                                         
-                                        if existing_keys_tuples:
-                                            # Convert date columns if necessary 
-                                            # ... (existing date conversion logic) ...
-                                            existing_keys_set = set(converted_tuples)
-                                            
-                                    except Exception as db_err:
-                                        logger.error(f"Database error checking existing keys (composite key) for chunk: {db_err}")
-                                        logger.error(f"SQL: {existing_keys_query_sql}")
-                                        logger.error(f"Params: {params_list}")
-                                        continue 
-                            else: # No valid composite keys found in chunk
-                                logger.info("No valid composite keys found in this chunk to check.")
-                                
-                        # Filter the chunk (using original pk_list_from_df for comparison)
+                                except Exception as db_err:
+                                    logger.error(f"Database error checking existing keys (composite key) for chunk: {db_err}")
+                                    logger.error(f"SQL: {existing_keys_query_sql}")
+                                    logger.error(f"Params: {params_dict}") # Log named params
+                                    continue 
+                        else: 
+                            logger.info("No valid composite keys found in this chunk to check.")
+                            
+                        # Filter the chunk
                         if existing_keys_set:
                             # Compare based on key type
                             if len(current_pk) == 1:
