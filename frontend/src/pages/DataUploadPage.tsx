@@ -13,7 +13,7 @@ type UploadStep = 'households' | 'products' | 'transactions' | 'done';
 
 const DataUploadPage: React.FC = () => {
   const { token } = useAuth();
-  const API_BASE_URL = 'https://cloud-comp-retail.vercel.app';
+  const API_BASE_URL = 'https://ccr-dev.vercel.app';
 
   // State for each file (still needed to hold the file object and status)
   const [fileStates, setFileStates] = useState<Record<UploadStep, FileUploadState>>({

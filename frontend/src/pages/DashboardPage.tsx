@@ -39,7 +39,7 @@ function useFetchDashboardData<T>(endpoint: string): FetchState<T> {
     error: null,
   });
   const { token } = useAuth();
-  const API_BASE_URL = 'https://cloud-comp-retail.vercel.app';
+  const API_BASE_URL = 'https://ccr-dev.vercel.app';
 
   useEffect(() => {
     if (!token) {
@@ -132,7 +132,7 @@ const DashboardPage: React.FC = () => {
   const [basketPredictError, setBasketPredictError] = useState<string | null>(null);
   const [featuresLoading, setFeaturesLoading] = useState(true);
   const { token } = useAuth(); // Get token for API calls
-  const API_BASE_URL = 'https://cloud-comp-retail.vercel.app'; // Added for direct fetch
+  const API_BASE_URL = 'https://ccr-dev.vercel.app'; // Added for direct fetch
   
   // Fetch available features for the basket predictor
   useEffect(() => {
@@ -177,7 +177,7 @@ const DashboardPage: React.FC = () => {
     setPredictError(null);
 
     try {
-      const response = await fetch('https://cloud-comp-retail.vercel.app', {
+      const response = await fetch('https://ccr-dev.vercel.app', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

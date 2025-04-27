@@ -465,7 +465,7 @@ scheduler.start()
 # --- CORS Middleware --- (allows the frontend to talk to the backend)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://cloud-comp-retail.vercel.app"], # allow any origin for now (maybe restrict later?)
+    allow_origins=["https://ccr-dev.vercel.app","https://ccr-dev.vercel.app/login"], # allow any origin for now (maybe restrict later?)
     allow_credentials=True,
     allow_methods=["*"], # allow all HTTP methods
     allow_headers=["*"], # allow all headers
