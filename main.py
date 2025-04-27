@@ -685,67 +685,112 @@ async def _process_upload(file: UploadFile, table_name: str, engine):
                     
                     # Create tuples of PK values from the current chunk
                     try:
-                        # Ensure PK columns exist in the chunk before trying to access
                         missing_cols = [col for col in current_pk if col not in df.columns]
                         if missing_cols:
                             logger.error(f"Uploaded CSV chunk for {table_name} is missing primary key column(s): {missing_cols}")
-                            # Skip this chunk or raise error? Skipping for now.
-                            continue # Move to the next chunk
+                            continue 
                         
-                        pk_tuples_from_df = [tuple(x) for x in df[current_pk].to_numpy()]
-                    except KeyError as key_err:
-                        logger.error(f"Chunk processing error: {key_err}") # Should be caught above
+                        # Extract PKs as standard python types
+                        pk_list_from_df = [tuple(row) for row in df[current_pk].to_records(index=False)]
+                        
+                    except Exception as key_err: # Broader exception catch for conversion issues
+                        logger.error(f"Chunk processing error extracting primary keys: {key_err}") 
                         continue
                         
-                    if pk_tuples_from_df:
+                    if pk_list_from_df:
                         # Build query to check ONLY the keys in this chunk
-                        # Constructing the WHERE clause carefully for multiple PKs
                         pk_conditions = []
-                        params = {}
+                        params_list = [] # Use a list for positional parameters
+
                         if len(current_pk) == 1:
+                            # Handle single primary key with IN clause
                             col_name = current_pk[0]
-                            placeholders = ', '.join([f':pk_{i}' for i in range(len(pk_tuples_from_df))])
-                            pk_conditions.append(f"[{col_name}] IN ({placeholders})")
-                            params = {f'pk_{i}': val[0] for i, val in enumerate(pk_tuples_from_df)}
+                            # Convert numpy types to standard python types for the IN clause
+                            # Ensure we handle potential None values if PK could be nullable (though unlikely)
+                            pk_values = [val[0] for val in pk_list_from_df if val[0] is not None]
+                            if pk_values: # Only query if there are values
+                               placeholders = ', '.join(['?' for _ in pk_values])
+                               pk_conditions.append(f"[{col_name}] IN ({placeholders})")
+                               params_list.extend(pk_values)
+                            else:
+                                pk_conditions.append("1=0") # No valid keys to check, ensure query returns nothing
+                            
                         else:
-                            # Handle composite keys (more complex, requires multiple OR conditions)
+                            # Handle composite keys (multiple OR conditions)
                             condition_parts = []
-                            for i, pk_tuple in enumerate(pk_tuples_from_df):
+                            for pk_tuple in pk_list_from_df:
                                 tuple_cond = []
-                                for j, col_name in enumerate(current_pk):
-                                    param_name = f':pk_{i}_{j}'
-                                    tuple_cond.append(f"[{col_name}] = {param_name}")
-                                    params[param_name] = pk_tuple[j]
-                                condition_parts.append(f"({' AND '.join(tuple_cond)})")
-                            pk_conditions.append(f"({' OR '.join(condition_parts)})")
+                                valid_tuple = True
+                                for val in pk_tuple:
+                                    if val is None: # Skip tuples with None in composite PK
+                                        valid_tuple = False
+                                        break
+                                    tuple_cond.append(f"[{current_pk[len(tuple_cond)]}] = ?")
+                                
+                                if valid_tuple:
+                                    condition_parts.append(f"({' AND '.join(tuple_cond)})")
+                                    params_list.extend(pk_tuple) # Add tuple values to the list
+                            
+                            if condition_parts: # Only add condition if there are valid tuples
+                                pk_conditions.append(f"({' OR '.join(condition_parts)})")
+                            else:
+                                pk_conditions.append("1=0") # No valid keys to check
                         
-                        existing_keys_query = f"SELECT DISTINCT {', '.join([f'[{col}]' for col in current_pk])} FROM {table_name} WHERE {' AND '.join(pk_conditions)}"
+                        existing_keys_query_sql = f"SELECT DISTINCT {', '.join([f'[{col}]' for col in current_pk])} FROM {table_name} WHERE {' AND '.join(pk_conditions)}"
                         
                         existing_keys_set = set()
-                        try:
-                            existing_keys_df = pd.read_sql(text(existing_keys_query), connection, params=params)
-                            if not existing_keys_df.empty:
-                                if 'DATE' in existing_keys_df.columns and 'DATE' in current_pk:
-                                    try:
-                                        existing_keys_df['DATE'] = pd.to_datetime(existing_keys_df['DATE']).dt.strftime('%Y-%m-%d')
-                                    except Exception as date_err_db:
-                                        logger.warning(f"Could not standardize DATE column from DB during PK check: {date_err_db}. PK matching might be affected.")
-                                existing_keys_set = set(tuple(x) for x in existing_keys_df.to_numpy())
-                            del existing_keys_df # Free memory
-                        except Exception as db_err:
-                             logger.error(f"Database error checking existing keys for chunk: {db_err}")
-                             # Decide how to handle: skip chunk, raise error? Skipping for now.
-                             continue 
+                        # Only run query if there are parameters to bind
+                        if params_list: 
+                            try:
+                                # Use positional parameters with execute
+                                # Pass params_list directly to execute, not read_sql
+                                result = connection.execute(text(existing_keys_query_sql), params_list)
+                                existing_keys_tuples = result.fetchall()
+                                result.close() # Close the result proxy
+                                
+                                if existing_keys_tuples:
+                                    # Convert date columns if necessary before adding to set
+                                    converted_tuples = []
+                                    date_indices = [i for i, col in enumerate(current_pk) if col == 'DATE']
+                                    for K_tuple in existing_keys_tuples:
+                                        temp_list = list(K_tuple)
+                                        for idx in date_indices:
+                                             if temp_list[idx] is not None:
+                                                 try:
+                                                      temp_list[idx] = pd.to_datetime(temp_list[idx]).strftime('%Y-%m-%d')
+                                                 except Exception as date_err_db:
+                                                      logger.warning(f"Could not standardize DATE column from DB during PK check: {date_err_db}.")
+                                                 # Keep original value if conversion fails
+                                        converted_tuples.append(tuple(temp_list))
+                                    existing_keys_set = set(converted_tuples)
+                                    
+                            except Exception as db_err:
+                                logger.error(f"Database error checking existing keys for chunk: {db_err}")
+                                logger.error(f"SQL: {existing_keys_query_sql}") # Log the SQL
+                                logger.error(f"Params: {params_list}") # Log the params
+                                continue 
 
-                        # Filter the chunk
+                        # Filter the chunk (using original pk_list_from_df for comparison)
                         if existing_keys_set:
-                            mask = df.apply(lambda row: tuple(row[current_pk]) not in existing_keys_set, axis=1)
+                            # Convert the chunk's PKs to the same format for comparison (dates as str)
+                            pk_tuples_from_df_str_dates = []
+                            date_indices_df = [i for i, col in enumerate(current_pk) if col == 'DATE']
+                            for pk_row_tuple in pk_list_from_df:
+                                temp_list = list(pk_row_tuple)
+                                for idx in date_indices_df:
+                                    if temp_list[idx] is not None:
+                                        # Already converted to string earlier in the chunk processing
+                                        pass 
+                                pk_tuples_from_df_str_dates.append(tuple(temp_list))
+                            
+                            # Create the mask using stringified date tuples
+                            mask = [pk_tuple not in existing_keys_set for pk_tuple in pk_tuples_from_df_str_dates]
                             df_new = df[mask]
                             logger.info(f"Chunk filtering: Kept {len(df_new)} of {len(df)} rows.")
                         else:
                             logger.info("No existing keys found for this chunk's PKs.")
                             df_new = df # All rows in chunk are new
-                    
+                
                 # --- Append only the new rows from the chunk --- 
                 rows_in_chunk_to_append = 0
                 if not df_new.empty:
@@ -768,13 +813,12 @@ async def _process_upload(file: UploadFile, table_name: str, engine):
         
         logger.info(f"Finished processing all chunks for {table_name}. Total rows appended: {rows_appended_total}")
         # --- Trigger dashboard update after all chunks are processed --- 
-        try:
-            logger.info(f"Triggering immediate run of dashboard update job after {table_name} processing.")
-            # Need to run the async function correctly from sync context or ensure scheduler runs it
-            # For simplicity, assuming scheduler handles async job correctly or use asyncio.create_task if needed
-            scheduler.run_job('dashboard_update_job', jobstore=None)
-        except Exception as job_e:
-            logger.error(f"Failed to trigger immediate dashboard update job: {job_e}")
+        # REMOVED problematic scheduler.run_job call
+        # try:
+        #    logger.info(f"Triggering immediate run of dashboard update job after {table_name} processing.")
+        #    scheduler.run_job('dashboard_update_job', jobstore=None) 
+        # except Exception as job_e:
+        #    logger.error(f"Failed to trigger immediate dashboard update job: {job_e}")
             
         return {"message": f"Processed upload for {table_name}. Appended {rows_appended_total} new rows."}
         
