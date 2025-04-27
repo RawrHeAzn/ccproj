@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en" class="bg-gradient-to-br from-gray-900 via-gray-800 to-black text-white min-h-screen">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Retail Data Portal 🌌</title>
+
+    <!-- Import futuristic fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;800&family=Roboto+Mono&display=swap" rel="stylesheet">
+    
+    <!-- Optional: Animate.css for nice simple animations -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css"/>
+
+    <style>
+      /* Global reset */
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      html, body {
+        font-family: 'Orbitron', 'Roboto Mono', sans-serif;
+        background: linear-gradient(135deg, #0f0f0f, #1a1a1a, #000000);
+        color: #e0e0e0;
+        min-height: 100vh;
+        overflow-x: hidden;
+      }
+
+      #root {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 2rem;
+        min-height: 100vh;
+      }
+
+      /* Cool neon glow for titles */
+      h1, h2, h3 {
+        text-align: center;
+        color: #00ffe7;
+        text-shadow: 0 0 5px #00ffe7, 0 0 10px #00ffe7, 0 0 20px #00ffe7;
+      }
+
+      /* Buttons glow up */
+      button {
+        background: linear-gradient(90deg, #00ffe7, #00aaff);
+        border: none;
+        color: black;
+        font-weight: bold;
+        padding: 0.75rem 1.5rem;
+        margin: 1rem 0;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: 0.3s;
+        box-shadow: 0 0 10px #00ffe7, 0 0 20px #00ffe7;
+      }
+
+      button:hover {
+        background: linear-gradient(90deg, #00aaff, #00ffe7);
+        transform: scale(1.05);
+      }
+
+      /* Inputs look like sci-fi terminals */
+      input, select, textarea {
+        background-color: #1a1a1a;
+        border: 1px solid #00ffe7;
+        color: #e0e0e0;
+        padding: 0.5rem;
+        margin-top: 0.5rem;
+        border-radius: 5px;
+        width: 100%;
+        font-family: 'Roboto Mono', monospace;
+      }
+
+      input:focus, select:focus, textarea:focus {
+        outline: none;
+        border-color: #00aaff;
+        box-shadow: 0 0 5px #00aaff;
+      }
+
+      /* Cards for any panels */
+      .card {
+        background: rgba(255, 255, 255, 0.05);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 1rem;
+        padding: 2rem;
+        margin: 2rem 0;
+        box-shadow: 0 8px 32px 0 rgba( 31, 38, 135, 0.37 );
+        width: 100%;
+        max-width: 600px;
+      }
+    </style>
+
+  </head>
+  <body>
+    <div id="root" class="animate__animated animate__fadeIn">
+      <!-- Your React/Svelte/Vite app will mount here -->
+    </div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
