@@ -13,6 +13,8 @@ interface SearchResult {
   Units: number;
 }
 
+const API_BASE_URL = 'https://dev-cc-frip.onrender.com'; // Updated URL
+
 const SearchPage: React.FC = () => {
   const [hshdNum, setHshdNum] = useState<string>('');
   const [results, setResults] = useState<SearchResult[]>([]);
@@ -21,7 +23,6 @@ const SearchPage: React.FC = () => {
   const [searched, setSearched] = useState(false); // Track if a search has been performed
 
   const { token } = useAuth(); // Get the auth token
-  const API_BASE_URL = 'https://dev-cc-1.onrender.com';
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();

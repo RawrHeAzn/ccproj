@@ -11,9 +11,10 @@ interface FileUploadState {
 // Type for overall process state
 type UploadStep = 'households' | 'products' | 'transactions' | 'done';
 
+const API_BASE_URL = 'https://dev-cc-frip.onrender.com'; // Updated URL
+
 const DataUploadPage: React.FC = () => {
   const { token } = useAuth();
-  const API_BASE_URL = 'https://dev-cc-1.onrender.com';
 
   // State for each file (still needed to hold the file object and status)
   const [fileStates, setFileStates] = useState<Record<UploadStep, FileUploadState>>({

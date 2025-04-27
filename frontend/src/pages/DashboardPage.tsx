@@ -22,7 +22,8 @@ import FrequentPairsTable from '../components/charts/FrequentPairsTable';
 import LoyaltyTrendsChart from '../components/charts/LoyaltyTrendsChart';
 import AssociationRulesTable from '../components/charts/AssociationRulesTable';
 // Import react-select
-import Select from 'react-select';
+import Select, { MultiValue, StylesConfig } from 'react-select';
+import { ResponsiveContainer, BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
 
 // Type for API fetching state
 interface FetchState<T> {
@@ -39,7 +40,7 @@ function useFetchDashboardData<T>(endpoint: string): FetchState<T> {
     error: null,
   });
   const { token } = useAuth();
-  const API_BASE_URL = 'https://dev-cc-1.onrender.com';
+  const API_BASE_URL = 'https://dev-cc-frip.onrender.com';
 
   useEffect(() => {
     if (!token) {
@@ -50,7 +51,7 @@ function useFetchDashboardData<T>(endpoint: string): FetchState<T> {
     const fetchData = async () => {
       setState({ data: null, loading: true, error: null });
       try {
-        const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+        const response = await fetch(`${API_BASE_URL}/${endpoint}`, {
           headers: { 'Authorization': `Bearer ${token}` },
         });
         if (!response.ok) {
@@ -132,7 +133,7 @@ const DashboardPage: React.FC = () => {
   const [basketPredictError, setBasketPredictError] = useState<string | null>(null);
   const [featuresLoading, setFeaturesLoading] = useState(true);
   const { token } = useAuth(); // Get token for API calls
-  const API_BASE_URL = 'https://dev-cc-1.onrender.com'; // Added for direct fetch
+  const API_BASE_URL = 'https://dev-cc-frip.onrender.com'; // Updated URL
   
   // Fetch available features for the basket predictor
   useEffect(() => {
@@ -177,7 +178,7 @@ const DashboardPage: React.FC = () => {
     setPredictError(null);
 
     try {
-      const response = await fetch('https://dev-cc-1.onrender.com', {
+      const response = await fetch(`${API_BASE_URL}/predict-clv`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -247,6 +248,49 @@ const DashboardPage: React.FC = () => {
       } finally {
           setBasketPredictLoading(false);
       }
+  };
+
+  // Handle selection change for the prediction input
+  const handleSelectChange = (selectedOptions: MultiValue<{ value: string; label: string }>) => {
+    setSelectedCommodities(selectedOptions ? selectedOptions.map((option: { value: string; label: string }) => ({ value: option.value, label: option.label })) : []);
+  };
+
+  // Custom styles for React Select (optional, for better dark mode etc.)
+  const selectStyles: StylesConfig<{ value: string; label: string }, true> = {
+    control: (provided: any) => ({
+      ...provided,
+      backgroundColor: '#333',
+      borderColor: '#555',
+    }),
+    menu: (provided: any) => ({
+      ...provided,
+      backgroundColor: '#333',
+    }),
+    option: (provided: any, state: { isSelected: boolean; isFocused: boolean }) => ({
+      ...provided,
+      backgroundColor: state.isSelected ? '#555' : state.isFocused ? '#444' : '#333',
+      color: 'white',
+      ':active': {
+        backgroundColor: '#666',
+      },
+    }),
+    multiValue: (provided: any) => ({
+      ...provided,
+      backgroundColor: '#555',
+    }),
+    multiValueLabel: (provided: any) => ({
+      ...provided,
+      color: 'white',
+    }),
+    multiValueRemove: (provided: any) => ({
+      ...provided,
+      color: '#aaa',
+      ':hover': {
+        backgroundColor: '#c53030',
+        color: 'white',
+      },
+    }),
+    // Add other style overrides if needed (input, placeholder, etc.)
   };
 
   return (
@@ -372,18 +416,11 @@ const DashboardPage: React.FC = () => {
                     isMulti
                     options={availableFeatures}
                     value={selectedCommodities}
-                    onChange={(selectedOptions) => setSelectedCommodities(selectedOptions as any)}
+                    onChange={handleSelectChange}
                     isLoading={featuresLoading}
                     placeholder={featuresLoading ? "Loading commodities..." : "Select commodities..."}
                     className="mb-4"
-                    styles={{ // Optional: Basic styling for better visibility
-                        control: (provided) => ({ ...provided, borderColor: '#a5b4fc' }),
-                        option: (provided, state) => ({
-                            ...provided,
-                            color: state.isFocused ? 'white' : '#333', // Darker text, white on hover/focus
-                            backgroundColor: state.isFocused ? '#6366f1' : provided.backgroundColor, // Indigo background on hover/focus
-                        }),
-                    }}
+                    styles={selectStyles}
                 />
                 
                 <button

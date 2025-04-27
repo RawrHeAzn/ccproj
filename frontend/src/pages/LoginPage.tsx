@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate, useLocation } from 'react-router-dom';
 
+const API_BASE_URL = 'https://dev-cc-frip.onrender.com'; // Updated URL - Move to config/env later
+
 const LoginPage: React.FC = () => {
   const [isRegistering, setIsRegistering] = useState(false);
   const [username, setUsername] = useState('');
@@ -14,8 +16,6 @@ const LoginPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const from = location.state?.from?.pathname || "/dashboard"; // Redirect back or to search page
-
-  const API_BASE_URL = 'https://dev-cc-1.onrender.com'; // Move to config/env later
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
